@@ -121,12 +121,85 @@ class ApiService {
     return items;
   }
 
+  async fetchCatalogTypes() {
+    const result = await this.callBackend('catalog/getTypes', {}, { loaderMessage: null });
+
+    if (!result) {
+      throw new Error('Respuesta inválida del servidor al consultar tipos de catálogo');
+    }
+
+    if (result.success === false) {
+      const errorMessage = (result.errors && result.errors[0]) || result.message || 'No se pudieron obtener los tipos de catálogo';
+      throw new Error(errorMessage);
+    }
+
+    return Array.isArray(result.data) ? result.data : [];
+  }
+
   clearCatalogCache(catalogo) {
     if (catalogo) {
       delete this.catalogosCache[catalogo];
     } else {
       this.catalogosCache = {};
     }
+  }
+
+  async fetchPresupuestosArea(filters = {}) {
+    const payload = {};
+    if (filters && typeof filters === 'object') {
+      const { area, vigencia, estado, esActual } = filters;
+      if (area) payload.area_id = area;
+      if (vigencia) payload.vigencia = vigencia;
+      if (estado) payload.estado = estado;
+      if (esActual !== undefined && esActual !== null) payload.es_actual = !!esActual;
+    }
+
+    const result = await this.callBackend('presupuestos/listar', payload, { loaderMessage: null });
+
+    if (!result || result.success === false) {
+      const errorMessage = (result && ((result.errors && result.errors[0]) || result.message || result.error)) || 'No se pudo obtener el listado de presupuestos.';
+      throw new Error(errorMessage);
+    }
+
+    return {
+      items: Array.isArray(result.data) ? result.data : [],
+      meta: result.meta || {}
+    };
+  }
+
+  async savePresupuestoArea(data) {
+    if (!data || typeof data !== 'object') {
+      throw new Error('Datos de presupuesto inválidos');
+    }
+
+    const result = await this.callBackend('presupuestos/guardar', data, {
+      loaderMessage: data.presupuesto_id ? 'Actualizando presupuesto...' : 'Creando presupuesto...'
+    });
+
+    if (!result || result.success === false) {
+      const errorMessage = (result && ((result.errors && result.errors[0]) || result.message || result.error)) || 'No fue posible guardar el presupuesto.';
+      throw new Error(errorMessage);
+    }
+
+    return result.data || result;
+  }
+
+  async deletePresupuestoArea(presupuestoId) {
+    const id = (presupuestoId || '').toString().trim();
+    if (!id) {
+      throw new Error('Identificador de presupuesto requerido');
+    }
+
+    const result = await this.callBackend('presupuestos/eliminar', { presupuesto_id: id }, {
+      loaderMessage: 'Eliminando presupuesto...'
+    });
+
+    if (!result || result.success === false) {
+      const errorMessage = (result && ((result.errors && result.errors[0]) || result.message || result.error)) || 'No fue posible eliminar el presupuesto.';
+      throw new Error(errorMessage);
+    }
+
+    return result.data || result;
   }
 
   async createCatalogItem(data) {

@@ -1,6 +1,15 @@
 import apiService from '../api.js';
 import CardsManager from '../cardsManager.js';
-import { mostrarToast, obtenerEmailUsuarioActual } from '../utils.js';
+import { RIESGO_SEMAFORO_CONFIG } from './constants.js';
+import {
+  mostrarToast,
+  obtenerEmailUsuarioActual,
+  normalizarEstadoRevision,
+  normalizarEstadoActividad,
+  obtenerClaseEstadoRevision,
+  obtenerClaseEstadoActividad,
+  ESTADOS_REVISION
+} from '../utils.js';
 
 function normalizarRespuestaActividades(respuesta) {
   if (Array.isArray(respuesta)) return respuesta;
@@ -46,6 +55,56 @@ function normalizarMetaValorLocal(valor) {
   return Math.round(numero * 100) / 100;
 }
 
+function normalizarRiesgoPorcentajeLocal(valor) {
+  if (valor === null || valor === undefined || valor === '') {
+    return null;
+  }
+
+  const texto = valor.toString().trim();
+  if (!texto) {
+    return null;
+  }
+
+  const sanitized = texto
+    .replace(/%/g, '')
+    .replace(/\s+/g, '')
+    .replace(/,/g, '.')
+    .replace(/[^0-9.+-]/g, '');
+
+  if (!sanitized) {
+    return null;
+  }
+
+  const numero = Number(sanitized);
+  if (!Number.isFinite(numero)) {
+    return null;
+  }
+
+  const bounded = Math.min(100, Math.max(0, numero));
+  return Math.round(bounded * 100) / 100;
+}
+
+function obtenerConfigRiesgoLocal(valor) {
+  const percent = normalizarRiesgoPorcentajeLocal(valor);
+  if (percent === null) {
+    return {
+      id: '',
+      label: 'Sin clasificar',
+      percent: null,
+      rangeLabel: '0% - 100%'
+    };
+  }
+
+  const config = RIESGO_SEMAFORO_CONFIG.find(item => percent >= item.min && percent <= item.max)
+    || RIESGO_SEMAFORO_CONFIG[RIESGO_SEMAFORO_CONFIG.length - 1];
+
+  return {
+    ...config,
+    percent,
+    rangeLabel: `${config.min}% - ${config.max}%`
+  };
+}
+
 function mapActividadParaTabla(raw) {
   const id = raw.id ?? raw.actividad_id ?? raw.codigo ?? '';
   const area = this.obtenerItemCatalogo(this.state.catalogos.areas, raw.area_id, raw.areaNombre || raw.area);
@@ -63,7 +122,57 @@ function mapActividadParaTabla(raw) {
   const planPrincipal = planesInfo.ids.length
     ? this.state.catalogos.planes.find(item => String(item.id) === String(planesInfo.ids[0]))
     : null;
-  const estado = this.obtenerItemCatalogo(this.state.catalogos.estados, raw.estado, raw.estadoNombre);
+  const estadoRevisionRaw =
+    raw.estado_revision ||
+    raw.estadoRevision ||
+    raw.estado_revision_nombre ||
+    raw.estadoRevisionNombre ||
+    raw.estadoRevisionDisplay ||
+    '';
+  const estadoGeneralRaw =
+    raw.estado ||
+    raw.estadoNombre ||
+    raw.estado_actividad ||
+    raw.estadoActividad ||
+    '';
+  const estadoCatalogo = this.obtenerItemCatalogo(
+    this.state.catalogos.estados,
+    estadoRevisionRaw || estadoGeneralRaw,
+    estadoRevisionRaw || estadoGeneralRaw
+  );
+  const estadoRevisionCanonical = estadoRevisionRaw ? normalizarEstadoRevision(estadoRevisionRaw) : '';
+  const estadoActividadCanonical = estadoGeneralRaw ? normalizarEstadoActividad(estadoGeneralRaw) : '';
+  const estadoDisplay = (() => {
+    const revisionEsSolida = ESTADOS_REVISION.includes(estadoRevisionCanonical) && estadoRevisionCanonical !== 'Sin revisión';
+    const actividadEsRevision = ESTADOS_REVISION.includes(estadoActividadCanonical) && estadoActividadCanonical !== 'Sin revisión';
+
+    if (revisionEsSolida) {
+      return estadoRevisionCanonical;
+    }
+
+    if (actividadEsRevision) {
+      return estadoActividadCanonical;
+    }
+
+    if (ESTADOS_REVISION.includes(estadoRevisionCanonical)) {
+      return estadoRevisionCanonical;
+    }
+
+    if (ESTADOS_REVISION.includes(estadoActividadCanonical)) {
+      return estadoActividadCanonical;
+    }
+
+    if (estadoRevisionCanonical) {
+      return estadoRevisionCanonical;
+    }
+
+    if (estadoActividadCanonical) {
+      return estadoActividadCanonical;
+    }
+
+    return 'Sin revisión';
+  })();
+  const estadoId = estadoCatalogo?.id || estadoDisplay;
   const responsable =
     raw.responsable ||
     raw.responsable_nombre ||
@@ -92,6 +201,9 @@ function mapActividadParaTabla(raw) {
   const metaTexto = metaDetalle || metaValorTexto;
   const metaDisplay = metaDescripcionCompleta || [metaValorTexto, metaTextoPlano].filter(Boolean).join(metaTextoPlano ? ' ' : '').trim();
   const metaTieneDigitos = /\d/.test((metaDetalle || metaFuente || '').toString());
+  const riesgoFuente = raw.riesgo_porcentaje ?? raw.riesgoPorcentaje ?? raw.riesgo_percent ?? raw.riesgoPercent ?? null;
+  const riesgoPorcentaje = normalizarRiesgoPorcentajeLocal(riesgoFuente);
+  const riesgoSemaforo = obtenerConfigRiesgoLocal(riesgoPorcentaje);
 
   return {
     id: String(id),
@@ -100,18 +212,26 @@ function mapActividadParaTabla(raw) {
     areaNombre: area?.nombre || raw.areaNombre || raw.area || '',
     areaId: area?.id || raw.area_id || '',
     subprocesoNombre: subproceso?.nombre || raw.subproceso || '',
-  indicadorNombre: indicadorTexto,
-  indicadorTexto,
-  meta: metaTexto || (metaTieneDigitos ? metaValor : ''),
-  metaDetalle: metaTexto,
-  metaValor,
-  metaValorTexto,
-  metaTextoPlano,
-  metaDisplay,
+    indicadorNombre: indicadorTexto,
+    indicadorTexto,
+    meta: metaTexto || (metaTieneDigitos ? metaValor : ''),
+    metaDetalle: metaTexto,
+    metaValor,
+    metaValorTexto,
+    metaTextoPlano,
+    metaDisplay,
     responsableNombre: responsable,
     riesgos: raw.riesgos || raw.riesgo || '',
-    estadoNombre: estado?.nombre || raw.estado || 'Planeada',
-    estadoId: estado?.id || estado?.nombre || raw.estado || 'Planeada',
+    riesgoPorcentaje,
+    riesgoSemaforo,
+    riesgoNivel: riesgoSemaforo.id,
+    riesgoNivelLabel: riesgoSemaforo.label,
+    estadoNombre: estadoDisplay,
+    estadoRevisionNombre: estadoRevisionCanonical || estadoDisplay,
+    estadoActividadNombre: estadoActividadCanonical,
+    estadoRevisionFuente: estadoRevisionRaw,
+    estadoActividadFuente: estadoGeneralRaw,
+    estadoId,
     planId: planPrincipal?.id || planesInfo.ids[0] || '',
     planIds: planesInfo.ids,
     planesNombres: planesInfo.nombres,
@@ -127,6 +247,39 @@ function mapActividadParaTabla(raw) {
     bimestres: raw.bimestres || [],
     raw
   };
+}
+
+// Extrae el último número de un código tipo 'GTH-2025-001' => 1
+function extraerNumeroFinalDeCodigo(codigo) {
+  if (!codigo) return null;
+  try {
+    const m = String(codigo).trim().match(/(\d+)\s*$/);
+    return m ? parseInt(m[1].replace(/^0+/, '') || m[1], 10) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Ordena actividades por área (prefiere prefijo del código) y luego por número final
+function ordenarPorAreaYNumero(actividades) {
+  if (!Array.isArray(actividades)) return actividades;
+  return actividades.slice().sort((a, b) => {
+    const prefijoA = (a.codigo && a.codigo.split('-')[0]) || a.areaNombre || '';
+    const prefijoB = (b.codigo && b.codigo.split('-')[0]) || b.areaNombre || '';
+    const keyA = String(prefijoA || '').toLowerCase();
+    const keyB = String(prefijoB || '').toLowerCase();
+    if (keyA !== keyB) return keyA.localeCompare(keyB);
+
+    const numA = extraerNumeroFinalDeCodigo(a.codigo) ?? Number.MIN_SAFE_INTEGER;
+    const numB = extraerNumeroFinalDeCodigo(b.codigo) ?? Number.MIN_SAFE_INTEGER;
+    if (numA !== numB) return numA - numB;
+
+    // Fallback: ordenar por código completo y luego por id
+    const codeA = String(a.codigo || '').toLowerCase();
+    const codeB = String(b.codigo || '').toLowerCase();
+    if (codeA !== codeB) return codeA.localeCompare(codeB);
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
 }
 
 function obtenerReferenciaActividadParaAvances(actividad) {
@@ -151,15 +304,19 @@ function obtenerReferenciaActividadParaAvances(actividad) {
 }
 
 function renderBadge(valor) {
-  const label = valor || 'Sin estado';
-  const normalized = label.toLowerCase();
-  let classes = 'bg-gray-100 text-gray-800';
-  if (normalized.includes('complet')) classes = 'bg-emerald-100 text-emerald-800';
-  else if (normalized.includes('progreso')) classes = 'bg-sky-100 text-sky-800';
-  else if (normalized.includes('suspend')) classes = 'bg-amber-100 text-amber-800';
-  else if (normalized.includes('cancel')) classes = 'bg-rose-100 text-rose-800';
+  const candidatos = Array.isArray(valor) ? valor : [valor];
+  const raw = candidatos.find(item => typeof item === 'string' && item.trim()) || 'Sin revisión';
+  const revisionCanonical = normalizarEstadoRevision(raw);
+  const actividadCanonical = normalizarEstadoActividad(raw);
+  const esRevision = ESTADOS_REVISION.includes(revisionCanonical);
+  const display = esRevision
+    ? revisionCanonical
+    : actividadCanonical || revisionCanonical || raw || 'Sin revisión';
+  const classes = esRevision
+    ? obtenerClaseEstadoRevision(display, 'badge')
+    : obtenerClaseEstadoActividad(display, 'badge');
 
-  return `<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${classes}">${label}</span>`;
+  return `<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${classes}">${display}</span>`;
 }
 
 async function cargarActividades({ loaderMessage = null } = {}) {
@@ -168,6 +325,12 @@ async function cargarActividades({ loaderMessage = null } = {}) {
     const actividades = this.normalizarRespuestaActividades(respuesta);
     const mapeadas = actividades.map(item => this.mapActividadParaTabla(item));
     this.state.actividades = this.aplicarRestriccionAreaEnListado(mapeadas);
+    // Ordenar visualmente por área/prefijo de código y luego por el número final del código
+    try {
+      this.state.actividades = ordenarPorAreaYNumero(this.state.actividades);
+    } catch (e) {
+      console.warn('[WARN] No fue posible ordenar las actividades por área/numero:', e);
+    }
     if (this.components.tablaActividades) {
       this.components.tablaActividades.setData(this.state.actividades);
     }

@@ -460,7 +460,8 @@ function actualizarEstadoAvance(payload) {
       return formatResponse(false, null, '', 'avance_id requerido');
     }
 
-    if (!nuevoEstado || !isValidReviewState(nuevoEstado)) {
+    const estadoNormalizado = normalizeReviewStateValue(nuevoEstado);
+    if (!estadoNormalizado || !isValidReviewState(estadoNormalizado)) {
       return formatResponse(false, null, '', `Estado de revisión inválido. Usa: ${(SYSTEM_CONFIG.REVIEW_STATES || []).join(', ')}`);
     }
 
@@ -471,9 +472,10 @@ function actualizarEstadoAvance(payload) {
       return formatResponse(false, null, '', 'Avance no encontrado');
     }
 
+    const comentariosTexto = comentarios ? comentarios.toString().trim() : '';
     const reviewData = {
-      estado_revision: nuevoEstado,
-      revision_comentarios: comentarios,
+      estado_revision: estadoNormalizado,
+      revision_comentarios: comentariosTexto,
       revision_fecha: getCurrentTimestamp(),
       revision_por: revisor,
       actualizado_el: getCurrentDateOnly()
@@ -485,9 +487,10 @@ function actualizarEstadoAvance(payload) {
     }
 
     const avanceActualizado = { ...registro, ...reviewData };
+    const estadosQueNotifican = ['Corrección', 'En revisión', 'Aprobado', 'Cancelado'];
 
-    if (notificar && ['Corrección requerida', 'Rechazada'].includes(nuevoEstado)) {
-      sendAvanceReviewNotification(avanceActualizado, nuevoEstado, comentarios, revisor);
+    if (notificar && estadosQueNotifican.indexOf(estadoNormalizado) !== -1) {
+      sendAvanceReviewNotification(avanceActualizado, estadoNormalizado, comentariosTexto, revisor);
     }
 
     if (typeof appendSystemLog === 'function') {
@@ -500,15 +503,15 @@ function actualizarEstadoAvance(payload) {
         actividad_codigo: avanceActualizado.codigo || '',
         bimestre: avanceActualizado.bimestre_nombre || avanceActualizado.bimestre_id || '',
         avance_id: avanceActualizado.avance_id || avanceId,
-        estado_revision: nuevoEstado,
-        requiere_revision: ['Corrección requerida', 'Rechazada'].includes(nuevoEstado),
+        estado_revision: estadoNormalizado,
+        requiere_revision: ['Corrección', 'Cancelado'].includes(estadoNormalizado),
         mensaje: 'Estado de revisión actualizado',
         payload_json: payload,
         resultado: 'OK'
       });
     }
 
-    return formatResponse(true, avanceActualizado, 'Estado de revisión actualizado');
+    return formatResponse(true, avanceActualizado, `Estado actualizado a ${estadoNormalizado}`);
   } catch (e) {
     console.error('actualizarEstadoAvance error', e);
     if (typeof appendSystemLog === 'function') {
@@ -522,7 +525,7 @@ function actualizarEstadoAvance(payload) {
         bimestre: payload?.bimestre || payload?.bimestre_nombre || '',
         avance_id: payload?.avance_id || payload?.id || '',
         estado_revision: estadoIntentado,
-        requiere_revision: ['Corrección requerida', 'Rechazada'].includes(estadoIntentado),
+        requiere_revision: ['Corrección', 'Cancelado'].includes(normalizeReviewStateValue(estadoIntentado)),
         mensaje: 'Error actualizando estado de avance',
         payload_json: { error: e && e.message ? e.message : e, payload: payload },
         resultado: 'ERROR'
@@ -532,30 +535,142 @@ function actualizarEstadoAvance(payload) {
   }
 }
 
+function resolveAvanceRecipientEmail(avance) {
+  if (!avance || typeof avance !== 'object') {
+    return '';
+  }
+
+  const candidatos = [];
+
+  if (avance.reportado_por && typeof avance.reportado_por === 'object') {
+    if (avance.reportado_por.email) candidatos.push(avance.reportado_por.email);
+    if (avance.reportado_por.correo) candidatos.push(avance.reportado_por.correo);
+  }
+
+  candidatos.push(
+    avance.reportado_por,
+    avance.reportadoPor,
+    avance.enviado_por,
+    avance.registrado_por,
+    avance.usuario,
+    avance.responsable
+  );
+
+  for (var i = 0; i < candidatos.length; i++) {
+    var candidato = candidatos[i];
+    if (!candidato) continue;
+    if (typeof candidato !== 'string') {
+      candidato = candidato.toString();
+    }
+    var trimmed = candidato.trim();
+    if (trimmed && trimmed.indexOf('@') !== -1) {
+      return trimmed;
+    }
+  }
+
+  return '';
+}
+
+function buildAvanceStatusEmailContent(avance, estado, comentarios, revisor, codigoRef) {
+  const canonicalEstado = normalizeReviewStateValue(estado) || estado || 'Sin revisión';
+  const actividad = (avance && typeof avance.actividad === 'object') ? avance.actividad : null;
+  const actividadDescripcion = actividad?.descripcion_actividad || actividad?.descripcion || actividad?.nombre || avance?.actividad_nombre || avance?.actividad || avance?.actividad_id || 'Actividad registrada';
+  const bimestre = avance?.bimestre_nombre || avance?.bimestre_id || avance?.bimestre || '';
+  const comentariosTexto = comentarios ? comentarios.toString().trim() : '';
+  const comentariosHtml = comentariosTexto ? escapeHtml(comentariosTexto).replace(/\r?\n/g, '<br>') : '';
+
+  const htmlParts = [];
+  const textParts = [];
+
+  htmlParts.push('<p>Hola,</p>');
+  textParts.push('Hola,');
+
+  switch (canonicalEstado) {
+    case 'Corrección':
+      htmlParts.push(`<p>El avance de la actividad <strong>${escapeHtml(actividadDescripcion)}</strong>${bimestre ? ` para el bimestre <strong>${escapeHtml(bimestre)}</strong>` : ''} requiere correcciones antes de poder ser aprobado.</p>`);
+      htmlParts.push('<p>Por favor revisa las observaciones y actualiza el reporte en el sistema.</p>');
+      textParts.push(`El avance de la actividad "${actividadDescripcion}"${bimestre ? ` para el bimestre ${bimestre}` : ''} requiere correcciones antes de poder ser aprobado.`);
+      textParts.push('Por favor revisa las observaciones y actualiza el reporte en el sistema.');
+      break;
+    case 'En revisión':
+      htmlParts.push(`<p>El avance de la actividad <strong>${escapeHtml(actividadDescripcion)}</strong>${bimestre ? ` (${escapeHtml(bimestre)})` : ''} fue marcado como <strong>En revisión</strong>. El equipo administrador está evaluando la información reportada.</p>`);
+      htmlParts.push('<p>No se requieren acciones adicionales por el momento.</p>');
+      textParts.push(`El avance de la actividad "${actividadDescripcion}"${bimestre ? ` (${bimestre})` : ''} fue marcado como "En revisión". El equipo administrador está evaluando la información reportada.`);
+      textParts.push('No se requieren acciones adicionales por el momento.');
+      break;
+    case 'Aprobado':
+      htmlParts.push(`<p>El avance de la actividad <strong>${escapeHtml(actividadDescripcion)}</strong>${bimestre ? ` (${escapeHtml(bimestre)})` : ''} fue <strong>aprobado</strong>. ¡Gracias por mantener la información actualizada!</p>`);
+      textParts.push(`El avance de la actividad "${actividadDescripcion}"${bimestre ? ` (${bimestre})` : ''} fue aprobado. ¡Gracias por mantener la información actualizada!`);
+      break;
+    case 'Cancelado':
+      htmlParts.push(`<p>El avance de la actividad <strong>${escapeHtml(actividadDescripcion)}</strong>${bimestre ? ` (${escapeHtml(bimestre)})` : ''} fue marcado como <strong>Cancelado</strong>.</p>`);
+      htmlParts.push('<p>No es necesario continuar con gestiones adicionales para este registro.</p>');
+      textParts.push(`El avance de la actividad "${actividadDescripcion}"${bimestre ? ` (${bimestre})` : ''} fue marcado como cancelado.`);
+      textParts.push('No es necesario continuar con gestiones adicionales para este registro.');
+      break;
+    default:
+      htmlParts.push(`<p>El avance de la actividad <strong>${escapeHtml(actividadDescripcion)}</strong> cambió al estado <strong>${escapeHtml(canonicalEstado)}</strong>.</p>`);
+      textParts.push(`El avance de la actividad "${actividadDescripcion}" cambió al estado "${canonicalEstado}".`);
+      break;
+  }
+
+  if (comentariosHtml) {
+    htmlParts.push('<p>Observaciones del equipo revisor:</p>');
+    htmlParts.push(`<blockquote style="border-left:3px solid #4f46e5;padding-left:12px;color:#374151;">${comentariosHtml}</blockquote>`);
+    textParts.push('Observaciones del equipo revisor:');
+    textParts.push(comentariosTexto);
+  }
+
+  if (codigoRef) {
+    htmlParts.push(`<p>Referencia: <strong>${escapeHtml(codigoRef)}</strong></p>`);
+    textParts.push(`Referencia: ${codigoRef}`);
+  }
+
+  if (revisor && revisor.indexOf('@') !== -1) {
+    htmlParts.push(`<p>Revisión registrada por: <strong>${escapeHtml(revisor)}</strong></p>`);
+    textParts.push(`Revisión registrada por: ${revisor}`);
+  }
+
+  htmlParts.push('<p>Gracias por tu colaboración.</p>');
+  htmlParts.push('<p>&mdash; Sistema PAI UNGRD</p>');
+  textParts.push('Gracias por tu colaboración.');
+  textParts.push('-- Sistema PAI UNGRD');
+
+  return {
+    htmlBody: htmlParts.join(''),
+    textBody: textParts.join('\n\n')
+  };
+}
+
 function sendAvanceReviewNotification(avance, estado, comentarios, revisor) {
   try {
-    const destinatario = (avance?.reportado_por || '').toString().trim();
-    if (!destinatario || destinatario.indexOf('@') === -1) {
+    const destinatario = resolveAvanceRecipientEmail(avance);
+    if (!destinatario) {
       return;
     }
 
-    const asunto = `Revisión requerida para el avance ${avance.avance_id || ''}`.trim();
-    const actividadId = avance?.actividad_id || 'sin actividad';
-    const htmlBody = `
-      <p>Estimado/a ${destinatario},</p>
-      <p>El avance asociado a la actividad <strong>${actividadId}</strong> fue marcado con el estado <strong>${estado}</strong>.</p>
-      ${comentarios ? `<p>Comentarios del revisor:</p><blockquote style="border-left:3px solid #4f46e5;padding-left:12px;color:#374151;">${comentarios}</blockquote>` : ''}
-      <p>Por favor realiza los ajustes y vuelve a enviar el avance para revisión.</p>
-      ${revisor ? `<p>Revisión realizada por: <strong>${revisor}</strong></p>` : ''}
-      <p>&mdash; Sistema PAI UNGRD</p>
-    `;
+    const estadoLabel = normalizeReviewStateValue(estado) || estado || 'Sin revisión';
+    const codigoRef = avance?.avance_id || avance?.codigo || avance?.actividad_codigo || '';
+    const asunto = codigoRef ? `${codigoRef} "${estadoLabel}"` : `Avance "${estadoLabel}"`;
 
-    MailApp.sendEmail({
+    const contenido = buildAvanceStatusEmailContent(avance, estadoLabel, comentarios, revisor, codigoRef);
+
+    const mailOptions = {
       to: destinatario,
       subject: asunto,
-      htmlBody: htmlBody,
+      htmlBody: contenido.htmlBody,
+      body: contenido.textBody,
       name: 'Sistema PAI UNGRD'
-    });
+    };
+
+    if (revisor && typeof revisor === 'string' && revisor.indexOf('@') !== -1) {
+      mailOptions.replyTo = revisor;
+      if (revisor !== destinatario) {
+        mailOptions.cc = revisor;
+      }
+    }
+
+    MailApp.sendEmail(mailOptions);
   } catch (error) {
     console.error('sendAvanceReviewNotification error:', error);
   }

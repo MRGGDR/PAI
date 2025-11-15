@@ -58,6 +58,32 @@ export function setSelectedActivity(activityId, { updateSelect = true, updateURL
   }
 }
 
+export function clearFilters() {
+  setSelectedActivity('', { updateSelect: true, updateURL: true, silent: true });
+
+  avancesState.filtros.year = '';
+  avancesState.filtros.bimestre = '';
+
+  const { filters } = domRefs;
+  const refreshSelect = typeof selectEnhancerContext.refreshModernSelect === 'function'
+    ? (targetId) => selectEnhancerContext.refreshModernSelect.call(selectEnhancerContext, targetId)
+    : null;
+  if (filters.year) {
+    filters.year.value = '';
+    if (filters.year.id && refreshSelect) {
+      refreshSelect(filters.year.id);
+    }
+  }
+  if (filters.bimestre) {
+    filters.bimestre.value = '';
+    if (filters.bimestre.id && refreshSelect) {
+      refreshSelect(filters.bimestre.id);
+    }
+  }
+
+  applyAvancesFilters();
+}
+
 export function handleFilterChange() {
   const previousActivity = avancesState.actividadSeleccionadaId;
   syncFilterStateFromUI();

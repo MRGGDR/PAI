@@ -115,3 +115,38 @@ export const DATE_MONTH_NAMES_ES = [
 ];
 
 export const DATE_WEEKDAY_LABELS_ES = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'];
+
+export const RIESGO_SEMAFORO_CONFIG = [
+  {
+    id: 'bajo',
+    label: 'Bajo',
+    min: 0,
+    max: 25,
+    defaultPercent: 10,
+    description: 'Impacto bajo o controlado'
+  },
+  {
+    id: 'moderado',
+    label: 'Moderado',
+    min: 26,
+    max: 50,
+    defaultPercent: 35,
+    description: 'Requiere seguimiento periódico'
+  },
+  {
+    id: 'alto',
+    label: 'Alto',
+    min: 51,
+    max: 75,
+    defaultPercent: 65,
+    description: 'Riesgo significativo, plan de mitigación activo'
+  },
+  {
+    id: 'critico',
+    label: 'Crítico',
+    min: 76,
+    max: 100,
+    defaultPercent: 90,
+    description: 'Nivel crítico, acciones inmediatas'
+  }
+];

@@ -6,7 +6,7 @@
   <link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Inter%3Awght%40400%3B500%3B700%3B900&amp;family=Noto+Sans%3Awght%40400%3B500%3B700%3B900" onload="this.rel='stylesheet'" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <title>PAI 2025 - Avances Bimestrales</title>
+  <title>Plan de Acción Institucional - Avances Bimestrales</title>
   <link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <style type="text/tailwindcss">
@@ -71,11 +71,17 @@
                     <option value="Septiembre-Octubre">Septiembre-Octubre</option>
                     <option value="Noviembre-Diciembre">Noviembre-Diciembre</option>
                   </select>
+                  <div class="flex justify-center col-span-1 md:col-span-2 xl:col-span-3">
+                    <button id="filter-clear" type="button" class="mt-2 inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-600 shadow-sm hover:border-indigo-300 hover:text-indigo-600">
+                      <span class="material-symbols-outlined text-base">restart_alt</span>
+                      Limpiar filtros
+                    </button>
+                  </div>
                 </div>
               </section>
 
               <section id="actividad-resumen-card" class="bg-white p-6 rounded-2xl shadow-md border border-slate-100">
-                <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="flex flex-col gap-6">
                   <div class="space-y-2">
                     <p class="text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]">Actividad seleccionada</p>
                     <h3 id="actividad-resumen-nombre" class="text-2xl font-semibold text-gray-900">Selecciona una actividad</h3>
@@ -86,22 +92,51 @@
                       <span id="actividad-resumen-subproceso" class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 font-medium text-slate-600">Subproceso no disponible</span>
                     </div>
                   </div>
-                  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Meta anual planificada</p>
-                      <p id="actividad-resumen-meta-plan" class="mt-1 text-lg font-semibold text-slate-800 long-number">&mdash;</p>
+                  
+                  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="group rounded-xl border-2 border-indigo-200 bg-gradient-to-br from-indigo-50 to-indigo-100/50 p-5 transition-all hover:shadow-lg hover:scale-[1.02]">
+                      <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-indigo-500 text-white shadow-md">
+                          <span class="material-symbols-outlined text-lg">flag</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-xs font-bold uppercase tracking-wide text-indigo-700/80">Meta anual planificada</p>
+                          <p id="actividad-resumen-meta-plan" class="mt-2 text-xl font-bold text-indigo-900 break-words">&mdash;</p>
+                        </div>
+                      </div>
                     </div>
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                      <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Presupuesto programado</p>
-                      <p id="actividad-resumen-presupuesto-plan" class="mt-1 text-lg font-semibold text-slate-800 long-number">&mdash;</p>
+                    <div class="group rounded-xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50 p-5 transition-all hover:shadow-lg hover:scale-[1.02]">
+                      <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-blue-500 text-white shadow-md">
+                          <span class="material-symbols-outlined text-lg">payments</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-xs font-bold uppercase tracking-wide text-blue-700/80">Presupuesto programado</p>
+                          <p id="actividad-resumen-presupuesto-plan" class="mt-2 text-xl font-bold text-blue-900 break-words">&mdash;</p>
+                        </div>
+                      </div>
                     </div>
-                    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                      <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Logro reportado en vista</p>
-                      <p id="actividad-resumen-meta-logro" class="mt-1 text-lg font-semibold text-emerald-700 long-number">&mdash;</p>
+                    <div class="group rounded-xl border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100/50 p-5 transition-all hover:shadow-lg hover:scale-[1.02]">
+                      <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md">
+                          <span class="material-symbols-outlined text-lg">trending_up</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-xs font-bold uppercase tracking-wide text-emerald-700/80">Logro reportado en vista</p>
+                          <p id="actividad-resumen-meta-logro" class="mt-2 text-xl font-bold text-emerald-900 break-words">&mdash;</p>
+                        </div>
+                      </div>
                     </div>
-                    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                      <p class="text-xs font-semibold uppercase tracking-wide text-emerald-600">Presupuesto ejecutado</p>
-                      <p id="actividad-resumen-presupuesto-ejecutado" class="mt-1 text-lg font-semibold text-emerald-700 long-number">&mdash;</p>
+                    <div class="group rounded-xl border-2 border-green-200 bg-gradient-to-br from-green-50 to-green-100/50 p-5 transition-all hover:shadow-lg hover:scale-[1.02]">
+                      <div class="flex items-start gap-3">
+                        <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-green-500 text-white shadow-md">
+                          <span class="material-symbols-outlined text-lg">account_balance_wallet</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-xs font-bold uppercase tracking-wide text-green-700/80">Presupuesto ejecutado</p>
+                          <p id="actividad-resumen-presupuesto-ejecutado" class="mt-2 text-xl font-bold text-green-900 break-words">&mdash;</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -135,19 +170,14 @@
                   <table class="w-full text-sm text-left text-gray-600 avances-table">
                     <thead class="text-xs text-gray-700 uppercase bg-gray-100">
                       <tr>
-                        <th class="px-6 py-3">Radicado</th>
-                        <th class="px-6 py-3">Actividad</th>
-                        <th class="px-6 py-3">Área</th>
-                        <th class="px-6 py-3">Año</th>
+                        <th class="px-6 py-3">Actividad (Código)</th>
                         <th class="px-6 py-3">Bimestre</th>
                         <th class="px-6 py-3">Meta</th>
                         <th class="px-6 py-3">Logro</th>
                         <th class="px-6 py-3">Cumplimiento</th>
                         <th class="px-6 py-3">Presupuesto</th>
-                        <th class="px-6 py-3">Evidencia</th>
                         <th class="px-6 py-3">Estado</th>
                         <th class="px-6 py-3">Reportado por</th>
-                        <th class="px-6 py-3">Fecha</th>
                       </tr>
                     </thead>
                     <tbody id="avances-body"></tbody>

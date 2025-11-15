@@ -507,6 +507,20 @@ export function renderAvancesTabla(items) {
 
   cuerpo.innerHTML = '';
 
+  const escapeHtml = (value) => {
+    if (value === null || value === undefined) return '';
+    return String(value).replace(/[&<>"']/g, (char) => {
+      switch (char) {
+        case '&': return '&amp;';
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '"': return '&quot;';
+        case "'": return '&#39;';
+        default: return char;
+      }
+    });
+  };
+
   if (!Array.isArray(items) || !items.length) {
     if (domRefs.emptyState) domRefs.emptyState.classList.remove('hidden');
     if (domRefs.summary) domRefs.summary.textContent = '0 avances encontrados';
@@ -524,27 +538,26 @@ export function renderAvancesTabla(items) {
     const fila = document.createElement('tr');
     fila.className = 'border-b last:border-b-0 bg-white';
 
-    const evidenciaHtml = item.evidencia_url
-      ? `<a class="text-[var(--primary-color)] hover:underline" href="${item.evidencia_url}" target="_blank" rel="noopener">Ver</a>`
-      : 'N/A';
+    const metaValue = parseNumericValue(item.meta_programada_bimestre);
+    const logroValue = parseNumericValue(item.logro_valor);
+    const presupuestoValue = parseNumericValue(item.presupuesto_valor);
+    const performance = evaluateAvancePerformance(metaValue, logroValue);
 
-    const performance = evaluateAvancePerformance(item.meta_programada_bimestre, item.logro_valor);
-
+    const actividadCodigo = item.actividad_codigo || item.actividad_id || 'Sin código';
+    const actividadTooltip = escapeHtml(item.actividad_label || 'Sin descripción disponible');
     const actividadHtml = `
-      <div class="flex flex-col gap-1">
-        <span class="text-sm font-semibold text-gray-900">${item.actividad_label || 'Sin actividad'}</span>
-        <span class="text-[11px] font-mono text-gray-500">${item.actividad_codigo ? `Código: ${item.actividad_codigo}` : 'Sin código'}</span>
-      </div>
+      <span class="block text-sm font-semibold text-gray-900 font-mono" title="${actividadTooltip}">${escapeHtml(actividadCodigo)}</span>
     `;
 
-    if (performance.ratio !== null && performance.ratio !== undefined) {
+    if (Number.isFinite(metaValue) && metaValue > 0) {
       metasConsideradas += 1;
-      totalMeta += Number(item.meta_programada_bimestre) || 0;
-      totalLogro += Number(item.logro_valor) || 0;
+      totalMeta += metaValue;
+      totalLogro += Number.isFinite(logroValue) ? logroValue : 0;
     }
 
-    const ratioDisplay = performance.ratio !== null && performance.ratio !== undefined
-      ? formatPercent(performance.ratio)
+    const ratioValue = Number.isFinite(performance.ratio) ? performance.ratio : null;
+    const ratioDisplay = ratioValue !== null
+      ? formatPercent(ratioValue)
       : 'N/A';
     const diffDisplay = Number.isFinite(performance.diff)
       ? formatNumber(performance.diff)
@@ -557,26 +570,25 @@ export function renderAvancesTabla(items) {
           <span class="avance-performance__label">${performance.label}</span>
         </div>
         <div class="avance-performance__bar">
-          <span class="avance-performance__bar-fill" style="width:${Math.min(Math.max((performance.ratio || 0) * 100, 0), 160)}%;"></span>
+          <span class="avance-performance__bar-fill" style="width:${Math.min(Math.max(((ratioValue || 0) * 100), 0), 160)}%;"></span>
         </div>
         <p class="avance-performance__meta">&Delta; ${diffDisplay}</p>
       </div>
     `;
 
+    const estadoLabel = item.estado_label || 'Sin estado';
+    const estadoChipClass = getEstadoChipClass(estadoLabel);
+    const bimestreLabel = escapeHtml(item.bimestre_label || 'N/A');
+
     fila.innerHTML = `
-  <td class="px-6 py-3 font-mono text-xs text-gray-600">${item.avance_id || item.id || 'N/A'}</td>
-  <td class="px-6 py-3">${actividadHtml}</td>
-      <td class="px-6 py-3 text-sm text-gray-500">${item.area_label || 'N/A'}</td>
-      <td class="px-6 py-3 text-sm text-gray-500">${item.anio || item.year || 'N/A'}</td>
-      <td class="px-6 py-3 text-sm text-gray-500">${item.bimestre_label || 'N/A'}</td>
-  <td class="px-6 py-3 text-sm text-gray-500 long-number">${formatNumber(item.meta_programada_bimestre)}</td>
-  <td class="px-6 py-3 text-sm text-gray-500 long-number">${formatNumber(item.logro_valor)}</td>
+      <td class="px-6 py-3">${actividadHtml}</td>
+      <td class="px-6 py-3 text-sm text-gray-500">${bimestreLabel}</td>
+  <td class="px-6 py-3 text-sm text-gray-500 long-number">${Number.isFinite(metaValue) ? formatNumber(metaValue) : 'N/A'}</td>
+  <td class="px-6 py-3 text-sm text-gray-500 long-number">${Number.isFinite(logroValue) ? formatNumber(logroValue) : 'N/A'}</td>
       <td class="px-6 py-3 text-sm text-gray-500">${performanceHtml}</td>
-  <td class="px-6 py-3 text-sm text-gray-500 long-number">${formatCurrency(item.presupuesto_valor)}</td>
-      <td class="px-6 py-3 text-sm text-gray-500">${evidenciaHtml}</td>
-      <td class="px-6 py-3"><span class="${getEstadoChipClass(item.estado_label)}">${item.estado_label}</span></td>
-      <td class="px-6 py-3 text-sm text-gray-500">${item.reportado_por || 'N/A'}</td>
-      <td class="px-6 py-3 text-sm text-gray-500">${formatDate(item.fecha_reporte)}</td>
+  <td class="px-6 py-3 text-sm text-gray-500 long-number">${Number.isFinite(presupuestoValue) ? formatCurrency(presupuestoValue) : 'N/A'}</td>
+  <td class="px-6 py-3"><span class="${estadoChipClass}">${escapeHtml(estadoLabel)}</span></td>
+  <td class="px-6 py-3 text-sm text-gray-500">${escapeHtml(item.reportado_por || 'N/A')}</td>
     `;
 
     fragment.appendChild(fila);

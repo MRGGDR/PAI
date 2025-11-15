@@ -9,6 +9,10 @@ export const permissionMethods = {
     return this.state?.usuario?.rol === 'admin';
   },
 
+  puedeGestionarPresupuestos() {
+    return Boolean(this.state?.permisos?.['budgets:manage'] || this.state?.usuario?.rol === 'admin');
+  },
+
   mostrarAccesoRestringido() {
     console.warn('[WARN] Acceso denegado al módulo de administración para el rol actual');
     if (this.dom.root) {
@@ -39,6 +43,23 @@ export const permissionMethods = {
         body.innerHTML = `
           <div class="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-700">
             Solo los administradores pueden gestionar usuarios. Contacta a un administrador si necesitas crear o eliminar cuentas.
+          </div>
+        `;
+      }
+    }
+
+    const panelPresupuestos = document.getElementById('panel-presupuestos');
+    if (panelPresupuestos && !this.puedeGestionarPresupuestos()) {
+      panelPresupuestos.setAttribute('data-disabled', 'true');
+      panelPresupuestos.open = false;
+      panelPresupuestos.querySelectorAll('button, input, select, textarea').forEach(el => {
+        el.setAttribute('disabled', 'true');
+      });
+      const body = panelPresupuestos.querySelector('.presupuestos-panel-body');
+      if (body) {
+        body.innerHTML = `
+          <div class="rounded-lg border border-amber-200 bg-amber-50 p-6 text-sm text-amber-700">
+            Solo los administradores pueden gestionar los presupuestos por área. Solicita acceso al equipo de coordinación si necesitas realizar cambios.
           </div>
         `;
       }

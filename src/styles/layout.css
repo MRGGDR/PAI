@@ -53,3 +53,71 @@ body.sidebar-pinned aside.sidebar{ box-shadow: 0 6px 18px rgba(15,23,42,0.12); }
   .layout-with-sidebar{ grid-template-columns: 0 1fr; }
   aside.sidebar{ display:none; }
 }
+
+/* ===================== ORTHOGRAPHY SHARED STYLES ===================== */
+
+.orthography-error{
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #dc2626;
+  text-decoration-thickness: 1.5px;
+  cursor: pointer;
+}
+
+.orthography-suggestions-menu{
+  position: absolute;
+  z-index: 9999;
+  min-width: 220px;
+  background: #ffffff;
+  border: 1px solid rgba(17,24,39,0.12);
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+  box-shadow: 0 24px 48px -12px rgba(15,23,42,0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  animation: ortho-fade-in 120ms ease;
+}
+
+.orthography-menu-title{
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #4b5563;
+  padding: 0.25rem 0.5rem 0.5rem;
+}
+
+.orthography-menu-option,
+.orthography-menu-ignore{
+  background: none;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-size: 0.95rem;
+  cursor: pointer;
+  color: #1f2937;
+  transition: background 120ms ease;
+}
+
+.orthography-menu-option:hover{
+  background: rgba(79,70,229,0.12);
+}
+
+.orthography-menu-ignore{
+  color: #6b7280;
+}
+
+.orthography-menu-ignore:hover{
+  background: rgba(17,24,39,0.06);
+}
+
+@keyframes ortho-fade-in{
+  from{
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to{
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

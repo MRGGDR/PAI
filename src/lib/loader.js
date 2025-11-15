@@ -10,6 +10,8 @@
  * @param {string} msg - Mensaje a mostrar durante la carga
  * @param {string} style - Estilo del loader ('solid', 'toast', 'inline')
  */
+import './debug-filter.js';
+
 const VARIANT_CLASS = {
   solid: 'app-loader--blocking',
   blocking: 'app-loader--blocking',

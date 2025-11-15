@@ -29,6 +29,7 @@ const SYSTEM_CONFIG = {
     LOGS: 'Logs',
     USERS: 'Usuarios',
     BIMESTRES: 'Bimestres',
+    AREA_BUDGETS: 'Presupuesto_Area',
     // Mantener compatibilidad durante transición
     LEGACY_CATALOGS: 'Catalogos'
   },
@@ -44,10 +45,20 @@ const SYSTEM_CONFIG = {
   },
   
   // Estados válidos para actividades
-  ACTIVITY_STATES: ['Planeada', 'En Progreso', 'Completada', 'Suspendida', 'Cancelada'],
+  ACTIVITY_STATES: [
+    'Sin revisión',
+    'En revisión',
+    'Corrección',
+    'Aprobado',
+    'Cancelado',
+    'Planeada',
+    'En Progreso',
+    'Completada',
+    'Suspendida'
+  ],
 
   // Estados de revisión para flujos de aprobación
-  REVIEW_STATES: ['Sin revisión', 'En revisión', 'Corrección requerida', 'Aprobado', 'Rechazada'],
+  REVIEW_STATES: ['Sin revisión', 'En revisión', 'Corrección', 'Aprobado', 'Cancelado'],
   
   // Tipos de catálogo según nueva estructura
   CATALOG_TYPES: {
@@ -55,7 +66,8 @@ const SYSTEM_CONFIG = {
     SUBPROCESO: 'subproceso', 
     OBJETIVO: 'objetivo',
     ESTRATEGIA: 'estrategia',
-    LINEA: 'linea',
+    LINEA_TRABAJO: 'linea_trabajo',
+    LINEA_ACCION: 'linea_accion',
     INDICADOR: 'indicador',
     PLAN: 'plan',
     BIMESTRE: 'bimestre',
@@ -69,6 +81,20 @@ const SYSTEM_CONFIG = {
     MAX_LOGIN_ATTEMPTS: 3,
     HMAC_SECRET: PropertiesService.getScriptProperties().getProperty('HMAC_SECRET') || 'replace_with_secret'
   }
+};
+
+const REVIEW_STATE_ALIASES = {
+  'sin revision': 'Sin revisión',
+  'en revision': 'En revisión',
+  'correccion': 'Corrección',
+  'correccion requerida': 'Corrección',
+  'correccion-requerida': 'Corrección',
+  'aprobado': 'Aprobado',
+  'aprobada': 'Aprobado',
+  'cancelado': 'Cancelado',
+  'cancelada': 'Cancelado',
+  'rechazado': 'Cancelado',
+  'rechazada': 'Cancelado'
 };
 
 const LOG_HEADERS = [
@@ -252,10 +278,55 @@ function isValidOption(value, validOptions) {
  * @param {string} value - Estado a validar
  * @returns {boolean} True si está permitido
  */
+function normalizeReviewStateValue(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  try {
+    const raw = value.toString().trim();
+    if (!raw) {
+      return '';
+    }
+
+    const key = raw
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (REVIEW_STATE_ALIASES[key]) {
+      return REVIEW_STATE_ALIASES[key];
+    }
+
+    const reviewStates = (SYSTEM_CONFIG && SYSTEM_CONFIG.REVIEW_STATES) || [];
+    for (var i = 0; i < reviewStates.length; i++) {
+      var state = reviewStates[i];
+      if (!state) continue;
+      var stateKey = state
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (stateKey === key) {
+        return state;
+      }
+    }
+
+    return raw;
+  } catch (error) {
+    return value;
+  }
+}
+
 function isValidReviewState(value) {
   if (!value) return false;
+  const normalized = normalizeReviewStateValue(value);
   const reviewStates = (SYSTEM_CONFIG && SYSTEM_CONFIG.REVIEW_STATES) || [];
-  return reviewStates.indexOf(value) !== -1;
+  return reviewStates.indexOf(normalized) !== -1;
 }
 
 /**
@@ -313,8 +384,15 @@ function validateActivityData(activity, operation = 'create') {
     errors.push('Fecha de fin debe tener formato YYYY-MM-DD');
   }
   
-  if (activity.estado && !isValidOption(activity.estado, SYSTEM_CONFIG.ACTIVITY_STATES)) {
-    errors.push(`Estado debe ser uno de: ${SYSTEM_CONFIG.ACTIVITY_STATES.join(', ')}`);
+  if (activity.estado) {
+    var estadoNormalizado = normalizeReviewStateValue(activity.estado);
+    if (estadoNormalizado && isValidReviewState(estadoNormalizado)) {
+      activity.estado = estadoNormalizado;
+    }
+
+    if (!isValidOption(activity.estado, SYSTEM_CONFIG.ACTIVITY_STATES)) {
+      errors.push(`Estado debe ser uno de: ${SYSTEM_CONFIG.ACTIVITY_STATES.join(', ')}`);
+    }
   }
   
   // Validar que fecha fin sea posterior a fecha inicio
@@ -622,6 +700,17 @@ function findRowByField(sheetName, searchField, searchValue) {
  * @param {Object} updateData - Datos a actualizar
  * @returns {boolean} True si se actualizó exitosamente
  */
+function normalizeKeyValueForComparison(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  try {
+    return value.toString().trim();
+  } catch (error) {
+    return '';
+  }
+}
+
 function updateRowByKey(sheetName, keyField, keyValue, updateData) {
   const spreadsheet = openSystemSpreadsheet();
   const sheet = spreadsheet.getSheetByName(sheetName);
@@ -637,9 +726,11 @@ function updateRowByKey(sheetName, keyField, keyValue, updateData) {
   if (keyColumnIndex === -1) return false;
   
   // Encontrar la fila
+  const normalizedTarget = normalizeKeyValueForComparison(keyValue);
   let targetRow = -1;
   for (let i = 1; i < values.length; i++) {
-    if (values[i][keyColumnIndex] === keyValue) {
+    const normalizedCurrent = normalizeKeyValueForComparison(values[i][keyColumnIndex]);
+    if (normalizedCurrent && normalizedCurrent === normalizedTarget) {
       targetRow = i + 1; // +1 porque las filas de Sheets son 1-indexed
       break;
     }

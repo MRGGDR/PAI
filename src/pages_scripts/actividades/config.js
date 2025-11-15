@@ -2,6 +2,8 @@
  * config.js - Configuración para el módulo de actividades
  */
 
+import '../../lib/debug-filter.js';
+
 // URLs y puntos de configuración
 export const CONFIG_BACKEND = {
   SCRIPT_URL: resolveScriptUrl()
@@ -43,7 +45,7 @@ export function shouldUseTextPlain(url) {
  * @returns {string} URL del backend
  */
 export function resolveScriptUrl() {
-  const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzYr2sSS9w7Zgil_vHCrZESGidiVMzaMJKtKUi9A4QPaoUXRR6VmQeeeomdaMr6RJ_duQ/exec';
+  const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzdid5JqHEArgvL5lQ8L9nv_RCO82rm0EVc5CJiOJE031EoI_0EebxoFtOfU0RiOmo31A/exec';
   const DEFAULT_DEV_URL = 'http://localhost:3000/api';
   let scriptUrl = null;
 

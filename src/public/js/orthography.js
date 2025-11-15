@@ -2,6 +2,112 @@ const TYPO_URL = new URL('../vendor/typo.min.js', import.meta.url);
 const AFF_URL = new URL('../dict/es_ES.aff', import.meta.url);
 const DIC_URL = new URL('../dict/es_ES.dic', import.meta.url);
 
+const DEFAULT_CUSTOM_WORDS = [
+	'autenticación',
+	'acrónimos',
+	'apóstrofes',
+	'autoría',
+	'dinámicamente',
+	'expiración',
+	'heurística',
+	'heurísticas',
+	'implementación',
+	'inicialización',
+	'inicializará',
+	'interactúa',
+	'iteración',
+	'marcación',
+	'mitigación',
+	'multipropósito',
+	'normalización',
+	'orquestación',
+	'paginación',
+	'parseó',
+	'planeación',
+	'redirección',
+	'rediseñada',
+	'reemplázalos',
+	'rúbrica',
+	'sanitización',
+	'sensibilización',
+	'serialización',
+	'sincronización',
+	'sistematización',
+	'tokenización',
+	'virtualización'
+];
+
+const globalCustomWords = new Set();
+const globalCustomSuggestionMap = new Map();
+
+function normalizeCustomWord(word) {
+	if (word === null || word === undefined) return '';
+	return word.toString().normalize('NFC').toLowerCase();
+}
+
+function removeDiacritics(value) {
+	if (!value) return '';
+	return value.normalize('NFD').replace(/\p{M}+/gu, '');
+}
+
+function registerCustomWord(word, targetSet = globalCustomWords, suggestionMap = globalCustomSuggestionMap) {
+	const normalized = normalizeCustomWord(word);
+	if (!normalized) return;
+
+	targetSet.add(normalized);
+
+	const base = removeDiacritics(normalized);
+	if (!suggestionMap.has(base)) {
+		suggestionMap.set(base, new Set());
+	}
+	suggestionMap.get(base).add(word.toString().normalize('NFC'));
+}
+
+function registerWords(words, targetSet = globalCustomWords, suggestionMap = globalCustomSuggestionMap) {
+	if (!Array.isArray(words)) return;
+	for (const word of words) {
+		registerCustomWord(word, targetSet, suggestionMap);
+	}
+}
+
+function getGlobalCustomWords() {
+	return Array.from(globalCustomWords);
+}
+
+function isCustomWord(normalizedWord, instanceSet) {
+	if (!normalizedWord) return false;
+	if (globalCustomWords.has(normalizedWord)) return true;
+	return instanceSet ? instanceSet.has(normalizedWord) : false;
+}
+
+function applyCasingFromSource(candidate, source) {
+	if (!candidate) return candidate;
+	if (!source) return candidate;
+	if (source === source.toUpperCase()) {
+		return candidate.toUpperCase();
+	}
+	if (source[0] === source[0]?.toUpperCase()) {
+		return candidate.charAt(0).toUpperCase() + candidate.slice(1);
+	}
+	return candidate;
+}
+
+registerWords(DEFAULT_CUSTOM_WORDS);
+
+if (typeof window !== 'undefined') {
+	if (Array.isArray(window.__ORTHOGRAPHY_CUSTOM_WORDS)) {
+		registerWords(window.__ORTHOGRAPHY_CUSTOM_WORDS);
+	}
+
+	window.Orthography = window.Orthography || {};
+	window.Orthography.addCustomWords = function(words) {
+		registerWords(words);
+	};
+	window.Orthography.getCustomWords = function() {
+		return getGlobalCustomWords();
+	};
+}
+
 let typoLoaderPromise = null;
 let dictionaryPromise = null;
 let spinnerStylesInjected = false;
@@ -136,6 +242,8 @@ function tokenize(text) {
 function normalizeWord(word) {
 	if (!word) return '';
 	return word
+		.toString()
+		.normalize('NFC')
 		.replace(/^[^\p{L}\p{M}]+/u, '')
 		.replace(/[^\p{L}\p{M}]+$/u, '')
 		.replace(/['\u2019]/g, "'")
@@ -159,7 +267,9 @@ class OrthographyChecker {
 			firstSuggestionElement,
 			autoCheck = true,
 			maxSuggestions = 5,
-			dictionaryReadyCallback = null
+			dictionaryReadyCallback = null,
+			customWords = null,
+			registerCustomWordsGlobally = false
 		} = options || {};
 
 		this.editor = ensureHTMLElement(editor);
@@ -177,6 +287,12 @@ class OrthographyChecker {
 		this.debouncedCheck = null;
 		this.isDestroyed = false;
 		this.ignoredWords = new Set();
+		this.instanceCustomWords = new Set();
+		this.instanceSuggestionMap = new Map();
+
+		if (Array.isArray(customWords) && customWords.length > 0) {
+			this.addCustomWords(customWords, { registerGlobally: registerCustomWordsGlobally === true });
+		}
 
 		this.editor.setAttribute('contenteditable', 'true');
 		this.editor.setAttribute('spellcheck', 'false');
@@ -349,7 +465,12 @@ class OrthographyChecker {
 			const normalized = normalizeWord(rawWord);
 			const normalizedLower = normalized.toLowerCase();
 
-			if (!isLikelyWord(normalizedLower) || this.ignoredWords.has(normalizedLower) || this.typo.check(normalizedLower)) {
+			if (!isLikelyWord(normalizedLower)) {
+				fragment.appendChild(document.createTextNode(rawWord));
+				continue;
+			}
+
+			if (this.ignoredWords.has(normalizedLower) || isCustomWord(normalizedLower, this.instanceCustomWords) || this.typo.check(normalizedLower)) {
 				fragment.appendChild(document.createTextNode(rawWord));
 				continue;
 			}
@@ -360,16 +481,35 @@ class OrthographyChecker {
 			span.dataset.normalized = normalizedLower;
 			span.textContent = rawWord;
 
-			const suggestionsRaw = this.typo.suggest(normalizedLower, this.maxSuggestions) || [];
-			const suggestions = suggestionsRaw.map((suggestion) => {
-				if (!suggestion) return suggestion;
-				// Preserve casing similar to the original word
-				if (rawWord === rawWord.toUpperCase()) return suggestion.toUpperCase();
-				if (rawWord[0] === rawWord[0]?.toUpperCase()) {
-					return suggestion.charAt(0).toUpperCase() + suggestion.slice(1);
-				}
-				return suggestion;
-			});
+			const baseKey = removeDiacritics(normalizedLower);
+			const initialSuggestions = this.typo.suggest(normalizedLower, this.maxSuggestions * 2) || [];
+			const uniqueSuggestions = [];
+			const seenSuggestions = new Set();
+
+			const pushSuggestion = (candidate) => {
+				if (!candidate) return;
+				const value = candidate.toString().normalize('NFC');
+				const key = value.toLowerCase();
+				if (seenSuggestions.has(key)) return;
+				seenSuggestions.add(key);
+				uniqueSuggestions.push(value);
+			};
+
+			initialSuggestions.forEach(pushSuggestion);
+
+			const globalCustomSet = globalCustomSuggestionMap.get(baseKey);
+			if (globalCustomSet) {
+				globalCustomSet.forEach(pushSuggestion);
+			}
+
+			const instanceCustomSet = this.instanceSuggestionMap.get(baseKey);
+			if (instanceCustomSet) {
+				instanceCustomSet.forEach(pushSuggestion);
+			}
+
+			const suggestions = uniqueSuggestions
+				.map((suggestion) => applyCasingFromSource(suggestion, rawWord))
+				.slice(0, this.maxSuggestions);
 			this.suggestionCache.set(span, suggestions);
 
 			fragment.appendChild(span);
@@ -533,12 +673,41 @@ class OrthographyChecker {
 		this.syncHiddenField();
 		this.runSpellcheck({ force: true });
 	}
+
+	addCustomWords(words, { registerGlobally = false } = {}) {
+		if (!Array.isArray(words) || words.length === 0) return;
+
+		for (const word of words) {
+			const normalized = normalizeCustomWord(word);
+			if (!normalized) continue;
+
+			this.instanceCustomWords.add(normalized);
+
+			const base = removeDiacritics(normalized);
+			if (!this.instanceSuggestionMap.has(base)) {
+				this.instanceSuggestionMap.set(base, new Set());
+			}
+			this.instanceSuggestionMap.get(base).add(word.toString().normalize('NFC'));
+		}
+
+		if (registerGlobally) {
+			registerWords(words);
+		}
+	}
 }
 
 export async function createOrthographyChecker(options) {
 	const checker = new OrthographyChecker(options);
 	await checker.ready;
 	return checker;
+}
+
+export function registerCustomWords(words) {
+	registerWords(words);
+}
+
+export function getCustomWords() {
+	return getGlobalCustomWords();
 }
 
 export { OrthographyChecker };
@@ -552,13 +721,38 @@ document.addEventListener('DOMContentLoaded', () => {
 		const counterSelector = editor.getAttribute('data-orthography-counter');
 		const suggestionSelector = editor.getAttribute('data-orthography-first');
 		const hiddenSelector = editor.getAttribute('data-orthography-hidden');
+		const customWordsAttr = editor.getAttribute('data-orthography-custom');
+
+		let customWords = null;
+		if (customWordsAttr) {
+			const trimmed = customWordsAttr.trim();
+			if (trimmed.startsWith('[')) {
+				try {
+					const parsed = JSON.parse(trimmed);
+					if (Array.isArray(parsed)) {
+						customWords = parsed.filter((word) => typeof word === 'string' && word.trim().length > 0);
+					}
+				} catch (error) {
+					console.warn('No se pudo parsear data-orthography-custom como JSON:', error);
+				}
+			} else {
+				customWords = trimmed
+					.split(',')
+					.map((word) => word.trim())
+					.filter((word) => word.length > 0);
+			}
+		}
+
+		const shouldRegisterCustomGlobally = editor.hasAttribute('data-orthography-custom-global');
 
 		const baseOptions = {
 			editor,
 			panel: panelSelector ? document.querySelector(panelSelector) : null,
 			counterElement: counterSelector ? document.querySelector(counterSelector) : null,
 			firstSuggestionElement: suggestionSelector ? document.querySelector(suggestionSelector) : null,
-			hiddenInput: hiddenSelector ? document.querySelector(hiddenSelector) : null
+			hiddenInput: hiddenSelector ? document.querySelector(hiddenSelector) : null,
+			customWords,
+			registerCustomWordsGlobally: shouldRegisterCustomGlobally
 		};
 
 		// If a verification button is provided, defer initialization until the user clicks it.

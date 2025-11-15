@@ -5,6 +5,7 @@
  * cuando se carga el DOM.
  */
 
+import './debug-filter.js';
 import { Auth } from './auth.js';
 
 /**

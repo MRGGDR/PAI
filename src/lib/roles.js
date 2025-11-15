@@ -15,6 +15,7 @@ const ROLE_PERMISSIONS = {
     'advances:edit': true,
     'advances:delete': true,
     'catalogs:manage': true,
+    'budgets:manage': true,
     'reports:view': true
   },
   contribuidor: {
@@ -25,6 +26,7 @@ const ROLE_PERMISSIONS = {
     'advances:edit': false,
     'advances:delete': false,
     'catalogs:manage': false,
+    'budgets:manage': false,
     'reports:view': true
   },
   visualizador: {
@@ -35,6 +37,7 @@ const ROLE_PERMISSIONS = {
     'advances:edit': false,
     'advances:delete': false,
     'catalogs:manage': false,
+    'budgets:manage': false,
     'reports:view': true
   }
 };

@@ -3,6 +3,16 @@ import { mostrarToast, obtenerEmailUsuarioActual } from '../../actividades/utils
 import { showLoaderDuring } from '../../../lib/loader.js';
 import { ADMIN_LOADER_MESSAGE } from './constants.js';
 
+const REVIEW_STATES_REQUIRING_MESSAGE = new Set(['Corrección']);
+const REVIEW_STATES_TRIGGER_EMAIL = new Set(['Corrección', 'En revisión', 'Aprobado', 'Cancelado']);
+const REVIEW_STATE_MESSAGE_TEMPLATES = {
+  'Sin revisión': 'La actividad volverá al estado inicial sin solicitar acciones adicionales.',
+  'En revisión': 'La actividad se encuentra en revisión por parte del equipo administrador. Te informaremos cualquier novedad.',
+  'Aprobado': 'La actividad fue aprobada. Gracias por mantener la información actualizada.',
+  'Corrección': 'Se solicitarán correcciones al responsable. Detalla los ajustes requeridos para facilitar su gestión.',
+  'Cancelado': 'La actividad fue cancelada. No es necesario realizar acciones adicionales.'
+};
+
 export const activitiesMethods = {
   async loadActividades(force = false) {
     try {
@@ -63,6 +73,7 @@ export const activitiesMethods = {
     if (!actividadesDom?.tableBody) return;
 
     actividadesDom.tableBody.innerHTML = '';
+    const estadosDisponibles = this.getReviewStates ? this.getReviewStates() : [];
 
     if (!items || items.length === 0) {
       const fila = document.createElement('tr');
@@ -76,52 +87,109 @@ export const activitiesMethods = {
       const fragment = document.createDocumentFragment();
       items.forEach((item) => {
         const id = this.obtenerActividadId(item);
+        const actividadBackendId = item?.actividad_id || item?.id || '';
         const codigo = this.obtenerActividadCodigo?.(item) || this.obtenerActividadId(item) || 'Sin código';
         const descripcion = item.descripcion_actividad || item.descripcion || item.nombre || 'Sin descripción';
         const area = item.area || item.area_responsable || item.area_id || 'Sin área';
-        const estado = item.estado || item.estado_actividad || '';
-        const estadoRevision = item.estado_revision || item.estadoRevision || 'Sin revisión';
+        const estadoGeneral = item.estado || item.estado_actividad || '';
+        const estadoRevisionCrudo = item.estado_revision || item.estadoRevision || estadoGeneral || 'Sin revisión';
+        const estadoRevisionCanonico = this.normalizarEstadoRevision(estadoRevisionCrudo);
+        const estadoGeneralCanonico = this.normalizarEstadoActividad
+          ? this.normalizarEstadoActividad(estadoGeneral)
+          : estadoGeneral;
+        const estadoCanonico = (() => {
+          if (estadoRevisionCanonico && estadoRevisionCanonico !== 'Sin revisión') {
+            return estadoRevisionCanonico;
+          }
+          if (estadoGeneralCanonico && estadoGeneralCanonico !== 'Sin revisión') {
+            const fallback = this.normalizarEstadoRevision(estadoGeneralCanonico);
+            if (fallback && estadosDisponibles.includes(fallback)) {
+              return fallback;
+            }
+          }
+          return estadoRevisionCanonico || 'Sin revisión';
+        })();
         const responsable = item.responsable || item.responsable_nombre || item.responsable_correo || 'Sin responsable';
+        const revisor = item.revision_por || item.revisor || '';
+        const fechaRevision = item.revision_fecha || item.actualizado_el || '';
+        const fechaRevisionTexto = fechaRevision ? this.formatearFecha(fechaRevision) : '';
+
+        const codigoSeguro = this.escapeHtml(codigo);
+        const descripcionSegura = this.escapeHtml(descripcion);
+        const areaSegura = this.escapeHtml(area);
+        const responsableSeguro = this.escapeHtml(responsable);
+        const revisorSeguro = this.escapeHtml(revisor);
+        const estadoSeleccionable = estadosDisponibles.includes(estadoCanonico) ? estadoCanonico : '';
+        const placeholderSelectedAttr = estadoSeleccionable ? '' : 'selected';
+        const opcionesSelect = estadosDisponibles
+          .map((estadoOpcion) => `<option value="${estadoOpcion}" ${estadoOpcion === estadoCanonico ? 'selected' : ''}>${estadoOpcion}</option>`)
+          .join('');
+        const revisionDetalle = [
+          revisorSeguro ? `Por ${revisorSeguro}` : '',
+          fechaRevisionTexto ? fechaRevisionTexto : ''
+        ]
+          .filter(Boolean)
+          .join(' · ');
 
         const fila = document.createElement('tr');
         fila.dataset.id = id;
         fila.innerHTML = `
           <td class="px-3 py-2 text-left text-sm text-gray-900">
-            <div class="font-mono text-xs uppercase tracking-wide text-indigo-600">${codigo}</div>
-            ${id && id !== codigo ? `<div class="text-[11px] text-gray-400">ID: ${id}</div>` : ''}
+            <div class="font-mono text-xs uppercase tracking-wide text-indigo-600">${codigoSeguro}</div>
           </td>
-          <td class="px-3 py-2 text-sm text-gray-900">${descripcion}</td>
-          <td class="px-3 py-2 text-sm text-gray-500">${area}</td>
+          <td class="px-3 py-2 text-sm text-gray-900">${descripcionSegura}</td>
+          <td class="px-3 py-2 text-sm text-gray-500">${areaSegura}</td>
           <td class="px-3 py-2 text-sm text-gray-500">
-            ${this.renderEstadoRevisionBadge(estadoRevision)}
-            ${estado ? `<div class="mt-1 text-xs text-gray-400">${estado}</div>` : ''}
+            <div class="flex flex-col gap-1">
+              <div class="flex flex-wrap items-center gap-2">
+                ${this.renderEstadoRevisionBadge(estadoCanonico)}
+              </div>
+              ${revisionDetalle ? `<div class="text-xs text-slate-400">${revisionDetalle}</div>` : ''}
+            </div>
           </td>
-          <td class="px-3 py-2 text-sm text-gray-500">${responsable}</td>
+          <td class="px-3 py-2 text-sm text-gray-500">${responsableSeguro}</td>
           <td class="px-3 py-2 text-right">
-            <div class="flex flex-wrap justify-end gap-2">
-              <button type="button" class="inline-flex items-center gap-1 rounded-md border border-green-200 px-2 py-1 text-xs font-medium text-green-600 hover:border-green-300 hover:text-green-700" data-action="approve" data-id="${id}" title="Marcar como aprobado">
-                <span class="material-icons" style="font-size:14px">check_circle</span>
-                Aprobar
-              </button>
-              <button type="button" class="inline-flex items-center gap-1 rounded-md border border-amber-200 px-2 py-1 text-xs font-medium text-amber-600 hover:border-amber-300 hover:text-amber-700" data-action="mark-review" data-id="${id}" title="Marcar en revisión">
-                <span class="material-icons" style="font-size:14px">pending</span>
-                En revisión
-              </button>
-              <button type="button" class="inline-flex items-center gap-1 rounded-md border border-orange-200 px-2 py-1 text-xs font-medium text-orange-600 hover:border-orange-300 hover:text-orange-700" data-action="request-changes" data-id="${id}" title="Solicitar correcciones">
-                <span class="material-icons" style="font-size:14px">edit_note</span>
-                Corrección
-              </button>
-              <button type="button" class="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600" data-action="edit" data-id="${id}">
-                <span class="material-icons" style="font-size:14px">edit</span>
-                Editar
-              </button>
-              <button type="button" class="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-500 hover:border-red-300 hover:text-red-600" data-action="delete" data-id="${id}">
-                <span class="material-icons" style="font-size:14px">delete</span>
-                Eliminar
-              </button>
+            <div class="flex flex-col items-end gap-2">
+              <select class="actividad-estado-select min-w-[170px] rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 shadow-sm transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+                data-role="actividad-estado-select"
+                data-id="${id}"
+                aria-label="Actualizar estado de ${codigoSeguro}">
+                <option value="" ${placeholderSelectedAttr}>Actualizar estado…</option>
+                ${opcionesSelect}
+              </select>
+              <div class="flex flex-wrap items-center justify-end gap-2">
+                <button type="button" class="inline-flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 text-xs font-medium text-gray-600 hover:border-indigo-300 hover:text-indigo-600" data-action="edit" data-id="${id}">
+                  <span class="material-icons" style="font-size:14px">edit</span>
+                  Editar
+                </button>
+                <button type="button" class="inline-flex items-center gap-1 rounded-md border border-red-200 px-2 py-1 text-xs font-medium text-red-500 hover:border-red-300 hover:text-red-600" data-action="delete" data-id="${id}">
+                  <span class="material-icons" style="font-size:14px">delete</span>
+                  Eliminar
+                </button>
+              </div>
             </div>
           </td>
         `;
+        fila.dataset.id = id;
+        fila.dataset.codigo = codigo;
+        fila.dataset.estadoRevision = estadoCanonico;
+        fila.dataset.estadoGeneral = estadoGeneralCanonico || '';
+        fila.dataset.responsable = responsable;
+        if (actividadBackendId) {
+          fila.dataset.actividadId = actividadBackendId;
+        }
+
+        const selectorEstado = fila.querySelector('select[data-role="actividad-estado-select"]');
+        if (selectorEstado) {
+          selectorEstado.value = estadoSeleccionable || '';
+          selectorEstado.dataset.currentValue = estadoSeleccionable;
+          selectorEstado.dataset.codigo = codigo;
+          selectorEstado.dataset.responsable = responsable;
+          if (actividadBackendId) {
+            selectorEstado.dataset.actividadId = actividadBackendId;
+          }
+        }
+
         fragment.appendChild(fila);
       });
       actividadesDom.tableBody.appendChild(fragment);
@@ -136,7 +204,138 @@ export const activitiesMethods = {
     }
   },
 
+  async handleActividadesChange(event) {
+    const select = event.target?.closest('select[data-role="actividad-estado-select"]');
+    if (!select) return;
+
+    const selectedRaw = select.value || '';
+    const previousValue = select.dataset.currentValue || '';
+
+    if (!selectedRaw || selectedRaw === previousValue) {
+      select.value = previousValue;
+      select.dataset.currentValue = previousValue;
+      return;
+    }
+
+    const actividadKey = select.dataset.id || select.closest('tr[data-id]')?.dataset.id;
+    if (!actividadKey) {
+      mostrarToast('No se pudo determinar la actividad seleccionada.', 'error');
+      select.value = previousValue;
+      select.dataset.currentValue = previousValue;
+      return;
+    }
+
+    const actividad = this.state.actividadesIndex?.[actividadKey];
+    if (!actividad) {
+      mostrarToast('La actividad seleccionada no se encuentra en la lista actual.', 'warning');
+      select.value = previousValue;
+      select.dataset.currentValue = previousValue;
+      return;
+    }
+
+    const actividadBackendId = (select.dataset.actividadId || actividad?.actividad_id || actividad?.id || '').toString().trim();
+    if (!actividadBackendId) {
+      mostrarToast('La actividad no cuenta con un identificador de registro válido.', 'error');
+      select.value = previousValue;
+      select.dataset.currentValue = previousValue;
+      return;
+    }
+
+    const estadoAnterior = this.normalizarEstadoRevision(previousValue);
+    const estadoSeleccionado = this.normalizarEstadoRevision(selectedRaw);
+
+    if (estadoSeleccionado === estadoAnterior) {
+      select.value = previousValue;
+      select.dataset.currentValue = previousValue;
+      return;
+    }
+
+    const codigoActividad = (select.dataset.codigo || this.obtenerActividadCodigo?.(actividad) || actividadKey || '').toString();
+    const responsableActividad = (select.dataset.responsable || actividad.responsable || actividad.responsable_nombre || actividad.responsable_correo || '').toString();
+
+    const requiereComentario = REVIEW_STATES_REQUIRING_MESSAGE.has(estadoSeleccionado);
+    const enviaCorreo = REVIEW_STATES_TRIGGER_EMAIL.has(estadoSeleccionado);
+    const mensajeEstado = REVIEW_STATE_MESSAGE_TEMPLATES[estadoSeleccionado] || '';
+
+    const descripcionPartes = [];
+    if (mensajeEstado) {
+      descripcionPartes.push(`<p>${this.escapeHtml(mensajeEstado)}</p>`);
+    }
+
+    if (enviaCorreo) {
+      const responsableSeguro = responsableActividad ? `<strong>${this.escapeHtml(responsableActividad)}</strong>` : 'el responsable registrado';
+      descripcionPartes.push(`<p>Se enviará una notificación a ${responsableSeguro}.</p>`);
+    }
+
+    const notaPartes = [
+      'El asunto del correo incluirá el código de la actividad y el estado seleccionado.'
+    ];
+    if (enviaCorreo) {
+      notaPartes.push('La notificación se enviará inmediatamente después de confirmar el cambio.');
+    }
+
+    const resultadoDialogo = await this.mostrarDialogoEstado({
+      titulo: `Actualizar estado de ${codigoActividad}`,
+      estado: estadoSeleccionado,
+      estadoSecundarioHtml: estadoAnterior ? `Estado actual: ${this.escapeHtml(estadoAnterior)}` : '',
+      descripcionHtml: descripcionPartes.join(''),
+      notaHtml: notaPartes.map(texto => `<p>${this.escapeHtml(texto)}</p>`).join(''),
+      requiereComentario,
+      comentarioInicial: actividad.revision_comentarios || '',
+      comentarioLabel: requiereComentario ? 'Comentarios requeridos para el responsable' : 'Mensaje adicional (opcional)',
+      comentarioPlaceholder: requiereComentario ? 'Describe las correcciones solicitadas…' : 'Puedes agregar detalles adicionales para el responsable…'
+    });
+
+    if (!resultadoDialogo) {
+      select.value = previousValue;
+      select.dataset.currentValue = previousValue;
+      return;
+    }
+
+    const revisorEmail = this.state?.usuario?.email || obtenerEmailUsuarioActual();
+    const payload = {
+      actividad_id: actividadBackendId,
+      estado_revision: estadoSeleccionado,
+      revisor: revisorEmail
+    };
+
+    if (resultadoDialogo.comentario) {
+      payload.comentarios = resultadoDialogo.comentario;
+    }
+
+    const loaderMensaje = `Actualizando estado (${estadoSeleccionado})…`;
+    const mensajeExito = `Actividad ${codigoActividad} actualizada (${estadoSeleccionado}).`;
+
+    select.disabled = true;
+
+    try {
+      await showLoaderDuring(
+        () => actividadesApi.reviewActividad(payload),
+        loaderMensaje,
+        'solid',
+        320
+      );
+
+      mostrarToast('Estado de revisión actualizado correctamente.', 'success');
+      this.mostrarMensajeActividad(mensajeExito, 'success');
+      select.dataset.currentValue = estadoSeleccionado;
+      await this.loadActividades(true);
+    } catch (error) {
+      console.error('[ERROR] handleActividadesChange:', error);
+      const mensaje = error?.message || 'No fue posible actualizar el estado de revisión.';
+      mostrarToast(mensaje, 'error');
+      this.mostrarMensajeActividad(mensaje, 'error');
+      select.value = previousValue;
+      select.dataset.currentValue = previousValue;
+    } finally {
+      select.disabled = false;
+    }
+  },
+
   handleActividadesClick(event) {
+    if (event.target.closest('select[data-role="actividad-estado-select"]')) {
+      return;
+    }
     const boton = event.target.closest('[data-action]');
     const fila = event.target.closest('tr[data-id]');
     const id = boton?.dataset.id || fila?.dataset.id;
@@ -155,83 +354,7 @@ export const activitiesMethods = {
       return;
     }
 
-    if (['approve', 'mark-review', 'request-changes'].includes(accion)) {
-      this.procesarAccionRevisionActividad(accion, actividad);
-      return;
-    }
-
     this.mostrarActividadEnFormulario(actividad);
-  },
-
-  async procesarAccionRevisionActividad(accion, actividad) {
-    const actividadId = this.obtenerActividadId(actividad);
-    if (!actividadId) {
-      mostrarToast('No se pudo determinar el ID de la actividad.', 'error');
-      return;
-    }
-
-    const configuracion = {
-      approve: {
-        estado: 'Aprobado',
-        confirmacion: `¿Confirmas marcar la actividad "${actividadId}" como aprobada?`,
-        loader: 'Marcando actividad como aprobada...'
-      },
-      'mark-review': {
-        estado: 'En revisión',
-        confirmacion: `¿Confirmas marcar la actividad "${actividadId}" en revisión?`,
-        loader: 'Actualizando estado de revisión...'
-      },
-      'request-changes': {
-        estado: 'Corrección requerida',
-        confirmacion: `¿Solicitar correcciones para la actividad "${actividadId}"?`,
-        loader: 'Solicitando correcciones...',
-        requiereComentarios: true
-      }
-    };
-
-    const opciones = configuracion[accion];
-    if (!opciones) return;
-
-    const confirmado = window.confirm(opciones.confirmacion);
-    if (!confirmado) return;
-
-    let comentarios = '';
-    if (opciones.requiereComentarios) {
-      comentarios = window.prompt('Describe brevemente las correcciones requeridas:', actividad?.revision_comentarios || '') || '';
-      if (!comentarios.trim()) {
-        mostrarToast('Debes ingresar comentarios para solicitar correcciones.', 'warning');
-        return;
-      }
-    }
-
-    const revisor = this.state?.usuario?.email || obtenerEmailUsuarioActual();
-    const payload = {
-      actividad_id: actividadId,
-      estado_revision: opciones.estado,
-      revisor
-    };
-
-    if (comentarios.trim()) {
-      payload.comentarios = comentarios.trim();
-    }
-
-    try {
-      await showLoaderDuring(
-        () => actividadesApi.reviewActividad(payload),
-        opciones.loader,
-        'solid',
-        300
-      );
-
-      mostrarToast('Estado de revisión actualizado correctamente.', 'success');
-      this.mostrarMensajeActividad(`Actividad ${actividadId} actualizada (${opciones.estado}).`, 'success');
-      await this.loadActividades(true);
-    } catch (error) {
-      console.error('[ERROR] procesarAccionRevisionActividad:', error);
-      const mensaje = error?.message || 'No fue posible actualizar el estado de revisión.';
-      mostrarToast(mensaje, 'error');
-      this.mostrarMensajeActividad(mensaje, 'error');
-    }
   },
 
   mostrarActividadEnFormulario(actividad) {

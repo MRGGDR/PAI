@@ -1,5 +1,5 @@
 import apiService from '../api.js';
-import { mostrarToast, coincideAreaUsuario } from '../utils.js';
+import { mostrarToast, coincideAreaUsuario, ESTADOS_REVISION } from '../utils.js';
 
 function obtenerCatalogosVacios() {
   return {
@@ -7,6 +7,7 @@ function obtenerCatalogosVacios() {
     subprocesos: [],
     objetivos: [],
     estrategias: [],
+    lineasTrabajo: [],
     lineas: [],
     indicadores: [],
     planes: [],
@@ -118,6 +119,106 @@ function coincideActividadConArea(item) {
   return false;
 }
 
+function normalizarTokenComparacion(valor) {
+  if (valor === null || valor === undefined) return '';
+  return String(valor).trim().toLowerCase();
+}
+
+function construirTokenSetArea(areaId, areasDisponibles = []) {
+  const tokens = new Set();
+  const agregar = (valor) => {
+    const token = normalizarTokenComparacion(valor);
+    if (token) tokens.add(token);
+  };
+
+  agregar(areaId);
+
+  const areaItem = areasDisponibles.find(item => String(item.id) === String(areaId));
+  if (areaItem) {
+    agregar(areaItem.id);
+    const raw = areaItem.raw || {};
+    [
+      raw.code,
+      raw.codigo,
+      raw.area_codigo,
+      raw.areaCode,
+      raw.area_code,
+      raw.label,
+      raw.nombre,
+      raw.descripcion,
+      raw.descripcion_larga,
+      raw.descripcion_corta,
+      raw.alias
+    ].forEach(agregar);
+  }
+
+  return tokens;
+}
+
+function construirTokenSetLineaTrabajo(linea) {
+  const tokens = new Set();
+  if (!linea) return tokens;
+
+  const agregar = (valor) => {
+    const token = normalizarTokenComparacion(valor);
+    if (token) tokens.add(token);
+  };
+
+  agregar(linea.parent_id);
+
+  const raw = linea.raw || {};
+  [
+    raw.parent_id,
+    raw.parentId,
+    raw.parent_code,
+    raw.parentCode,
+    raw.area_id,
+    raw.areaId,
+    raw.codigo_area,
+    raw.area_codigo,
+    raw.areaCode,
+    raw.area_code,
+    raw.area,
+    raw.areaNombre,
+    raw.area_nombre,
+    raw.area_label,
+    raw.areaDescripcion,
+    raw.area_descripcion,
+    raw.areaAsignada
+  ].forEach(agregar);
+
+  return tokens;
+}
+
+function construirTokenSetEstrategia(estrategiaId, estrategiasDisponibles = []) {
+  const tokens = new Set();
+  const agregar = (valor) => {
+    const token = normalizarTokenComparacion(valor);
+    if (token) tokens.add(token);
+  };
+
+  agregar(estrategiaId);
+
+  const estrategiaItem = estrategiasDisponibles.find(item => String(item.id) === String(estrategiaId));
+  if (estrategiaItem) {
+    agregar(estrategiaItem.id);
+    const raw = estrategiaItem.raw || {};
+    [
+      estrategiaItem.nombre,
+      raw.id,
+      raw.uuid,
+      raw.code,
+      raw.codigo,
+      raw.parent_id,
+      raw.parentId,
+      raw.parent_code,
+      raw.parentCode
+    ].forEach(agregar);
+  }
+
+  return tokens;
+}
+
 function aplicarRestriccionAreaEnListado(lista = []) {
   if (!this.debeRestringirPorArea()) return Array.isArray(lista) ? [...lista] : [];
   return (Array.isArray(lista) ? lista : []).filter(item => this.coincideActividadConArea(item));
@@ -190,8 +291,7 @@ function aplicarRestriccionesDeAreaEnSelects() {
 }
 
 function obtenerEstadosDisponibles() {
-  const estados = ['Planeada', 'En Progreso', 'Completada', 'Suspendida', 'Cancelada'];
-  return estados.map(nombre => ({ id: nombre, nombre, raw: { label: nombre } }));
+  return ESTADOS_REVISION.map(nombre => ({ id: nombre, nombre, raw: { label: nombre } }));
 }
 
 function obtenerIdCatalogo(item, namespace, index) {
@@ -339,7 +439,14 @@ async function cargarCatalogos({ loaderMessage = null } = {}) {
         subprocesos: this.normalizeCatalogItems(data.subprocesos, 'subproceso'),
         objetivos: this.normalizeCatalogItems(data.objetivos, 'objetivo'),
         estrategias: this.normalizeCatalogItems(data.estrategias, 'estrategia'),
-        lineas: this.normalizeCatalogItems(data.lineas, 'linea'),
+        lineasTrabajo: this.normalizeCatalogItems(
+          data.lineas_trabajo || data.lineasTrabajo || data.linea_trabajo || [],
+          'linea_trabajo'
+        ),
+        lineas: this.normalizeCatalogItems(
+          data.lineas_accion || data.lineasAccion || data.lineas || [],
+          'linea_accion'
+        ),
         indicadores: this.normalizeCatalogItems(data.indicadores, 'indicador'),
         planes: this.normalizeCatalogItems(data.planes, 'plan'),
         mipg: this.normalizeCatalogItems(data.mipg, 'mipg'),
@@ -365,7 +472,8 @@ function poblarSelectsCatalogos() {
   this.llenarSelect('mipg_codigo', this.state.catalogos.mipg, { placeholder: 'Seleccionar dimensión MIPG...' });
   this.llenarSelect('objetivo_id', this.state.catalogos.objetivos, { placeholder: 'Seleccionar objetivo...' });
   this.llenarSelect('estrategia_id', this.state.catalogos.estrategias, { placeholder: 'Seleccionar estrategia...' });
-  this.llenarSelect('linea_id', this.state.catalogos.lineas, { placeholder: 'Seleccionar línea de acción...' });
+  this.llenarSelect('linea_trabajo_id', this.state.catalogos.lineasTrabajo, { placeholder: 'Seleccionar línea de trabajo...' });
+  this.llenarSelect('linea_accion_id', this.state.catalogos.lineas, { placeholder: 'Seleccionar línea de acción...' });
   this.llenarSelect('fuente_financiacion', this.state.catalogos.fuentes, { placeholder: 'Seleccionar fuente...' });
   this.llenarSelect('plan_id', this.state.catalogos.planes, { placeholder: 'Seleccionar planes...' });
   this.refreshPlanMultiSelect();
@@ -375,13 +483,42 @@ function poblarSelectsCatalogos() {
   this.llenarSelect('filtro-estado', this.state.catalogos.estados, { placeholder: 'Todos los estados' });
 
   const areaSelect = document.getElementById('area_id');
+  const estrategiaSelect = document.getElementById('estrategia_id');
   if (areaSelect) {
     areaSelect.addEventListener('change', () => {
-      this.actualizarSubprocesosPorArea(areaSelect.value);
+      const areaValue = areaSelect.value;
+      const lineaTrabajoSelect = document.getElementById('linea_trabajo_id');
+      const lineaTrabajoActual = lineaTrabajoSelect ? lineaTrabajoSelect.value : '';
+      this.actualizarSubprocesosPorArea(areaValue);
+      this.actualizarLineasTrabajoPorArea(areaValue, lineaTrabajoActual);
+      const estrategiaValue = estrategiaSelect ? estrategiaSelect.value : '';
+      this.actualizarLineasAccionPorEstrategia(estrategiaValue);
+      if (typeof this.onAreaSelectionChange === 'function') {
+        this.onAreaSelectionChange(areaValue, {
+          presupuestoPlaneado: this.obtenerPresupuestoProgramadoActual(),
+          fechaInicio: document.getElementById('fecha_inicio_planeada')?.value
+        });
+      }
     });
   }
 
-  this.actualizarSubprocesosPorArea(areaSelect ? areaSelect.value : '');
+  const areaInicial = areaSelect ? areaSelect.value : '';
+  this.actualizarSubprocesosPorArea(areaInicial);
+  this.actualizarLineasTrabajoPorArea(areaInicial);
+  const estrategiaInicial = estrategiaSelect ? estrategiaSelect.value : '';
+  this.actualizarLineasAccionPorEstrategia(estrategiaInicial);
+  if (typeof this.onAreaSelectionChange === 'function') {
+    this.onAreaSelectionChange(areaInicial, {
+      presupuestoPlaneado: this.obtenerPresupuestoProgramadoActual(),
+      fechaInicio: document.getElementById('fecha_inicio_planeada')?.value
+    });
+  }
+
+  if (estrategiaSelect) {
+    estrategiaSelect.addEventListener('change', () => {
+      this.actualizarLineasAccionPorEstrategia(estrategiaSelect.value);
+    });
+  }
 
   this.aplicarRestriccionesDeAreaEnSelects();
 }
@@ -400,6 +537,100 @@ function actualizarSubprocesosPorArea(areaId, selectedSubprocesoId = '') {
   this.llenarSelect('subproceso_id', disponibles, {
     placeholder: 'Seleccionar subproceso...',
     selectedValue: selectedSubprocesoId
+  });
+}
+
+function actualizarLineasTrabajoPorArea(areaId, selectedLineaId = '') {
+  const lineaTrabajoSelect = document.getElementById('linea_trabajo_id');
+  if (!lineaTrabajoSelect) return;
+
+  const todasLineas = Array.isArray(this.state.catalogos.lineasTrabajo)
+    ? this.state.catalogos.lineasTrabajo
+    : [];
+
+  if (!todasLineas.length) {
+    this.llenarSelect('linea_trabajo_id', [], {
+      placeholder: 'Seleccionar línea de trabajo...'
+    });
+    return;
+  }
+
+  const tokensArea = construirTokenSetArea(areaId, this.state.catalogos.areas || []);
+  const debeFiltrar = tokensArea.size > 0;
+
+  const disponibles = debeFiltrar
+    ? todasLineas.filter(linea => {
+        if (!linea) return false;
+        const tokensLinea = construirTokenSetLineaTrabajo(linea);
+        if (!tokensLinea.size) return false;
+        for (const token of tokensLinea) {
+          if (tokensArea.has(token)) {
+            return true;
+          }
+        }
+        return false;
+      })
+    : todasLineas;
+
+  const valorActual = selectedLineaId || lineaTrabajoSelect.value;
+  const existeValor = valorActual && disponibles.some(item => String(item.id) === String(valorActual));
+
+  this.llenarSelect('linea_trabajo_id', disponibles, {
+    placeholder: 'Seleccionar línea de trabajo...',
+    selectedValue: existeValor ? valorActual : ''
+  });
+}
+
+function actualizarLineasAccionPorEstrategia(estrategiaId, selectedLineaAccionId = '') {
+  const lineaAccionSelect = document.getElementById('linea_accion_id');
+  if (!lineaAccionSelect) return;
+
+  const todasLineas = Array.isArray(this.state.catalogos.lineas)
+    ? this.state.catalogos.lineas
+    : [];
+
+  if (!todasLineas.length) {
+    this.llenarSelect('linea_accion_id', [], {
+      placeholder: 'Seleccionar línea de acción...',
+      selectedValue: ''
+    });
+    return;
+  }
+
+  const tokensEstrategia = construirTokenSetEstrategia(estrategiaId, this.state.catalogos.estrategias || []);
+  const debeFiltrar = tokensEstrategia.size > 0;
+
+  const disponibles = debeFiltrar
+    ? todasLineas.filter(item => {
+        if (!item) return false;
+        const raw = item.raw || {};
+        const candidatos = [
+          item.parent_id,
+          raw.parent_id,
+          raw.parentId,
+          raw.parent_code,
+          raw.parentCode,
+          raw.estrategia_id,
+          raw.estrategiaId,
+          raw.estrategia_codigo,
+          raw.estrategiaCodigo
+        ].map(normalizarTokenComparacion).filter(Boolean);
+        if (!candidatos.length) return false;
+        for (const token of candidatos) {
+          if (tokensEstrategia.has(token)) {
+            return true;
+          }
+        }
+        return false;
+      })
+    : todasLineas;
+
+  const valorActual = selectedLineaAccionId || lineaAccionSelect.value;
+  const existeValor = valorActual && disponibles.some(item => String(item.id) === String(valorActual));
+
+  this.llenarSelect('linea_accion_id', disponibles, {
+    placeholder: 'Seleccionar línea de acción...',
+    selectedValue: existeValor ? valorActual : ''
   });
 }
 
@@ -447,6 +678,8 @@ export const catalogMethods = {
   cargarCatalogos,
   poblarSelectsCatalogos,
   actualizarSubprocesosPorArea,
+  actualizarLineasTrabajoPorArea,
+  actualizarLineasAccionPorEstrategia,
   resolverValorCatalogo,
   obtenerItemCatalogo
 };

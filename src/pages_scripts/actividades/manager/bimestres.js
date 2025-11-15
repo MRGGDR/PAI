@@ -74,6 +74,9 @@ function resetBimestresSection() {
       descripcionFeedback.className = 'mt-1 hidden text-xs font-semibold';
     }
   });
+  if (typeof this.resetAreaBudgetSummary === 'function') {
+    this.resetAreaBudgetSummary();
+  }
   this.actualizarResumenBimestres();
 }
 
@@ -261,6 +264,22 @@ function actualizarResumenBimestres() {
         ? `La suma de la meta programada por bimestre es menor a la meta del indicador por ${this.formatearNumero(Math.abs(metaDiferencia), { maximumFractionDigits: 2 })}.`
         : `La suma de la meta programada por bimestre excede la meta del indicador en ${this.formatearNumero(metaDiferencia, { maximumFractionDigits: 2 })}.`;
     }
+  }
+
+  if (typeof this.renderAreaBudgetSummary === 'function' && this.state?.presupuestoArea?.resumen) {
+    const resumenArea = this.state.presupuestoArea.resumen;
+    const baseDisponible = Number.isFinite(this.state.presupuestoArea.baseDisponible)
+      ? Number(this.state.presupuestoArea.baseDisponible)
+      : Number(resumenArea.presupuesto_disponible) || 0;
+    const presupuestoProgramado = presupuestoTotal;
+    const disponibleEstimadoLocal = Number(baseDisponible - presupuestoProgramado);
+
+    resumenArea.presupuesto_disponible_estimado = disponibleEstimadoLocal;
+
+    this.renderAreaBudgetSummary({
+      presupuestoProgramado,
+      presupuestoDisponibleEstimado: disponibleEstimadoLocal
+    });
   }
 
   if (Array.isArray(this.bimestresUI.inputs)) {

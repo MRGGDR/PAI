@@ -58,10 +58,16 @@ const CATALOG_DEFINITIONS = {
     parentType: 'objetivo',
     description: 'Estrategias por objetivo'
   },
-  'linea': {
+  'linea_trabajo': {
+    prefix: 'LTR',
+    hasParent: true,
+    parentType: 'estrategia',
+    description: 'Líneas de trabajo'
+  },
+  'linea_accion': {
     prefix: 'LIN',
     hasParent: true,
-    parentType: 'estrategia', 
+    parentType: 'estrategia',
     description: 'Líneas de acción'
   },
   'indicador': {
@@ -91,6 +97,64 @@ const CATALOG_DEFINITIONS = {
   }
 };
 
+const CATALOG_TYPE_ALIASES = {
+  'linea': ['linea_accion', 'linea'],
+  'linea_accion': ['linea_accion', 'linea']
+};
+
+function normalizeCatalogType(type) {
+  if (type === null || type === undefined) {
+    return type;
+  }
+  const value = String(type).trim();
+  if (!value) return value;
+  if (value === 'linea') {
+    return 'linea_accion';
+  }
+  return value;
+}
+
+function normalizeCatalogItem(item) {
+  if (!item || typeof item !== 'object') {
+    return item;
+  }
+  if (item.catalogo === 'linea') {
+    return Object.assign({}, item, { catalogo: 'linea_accion' });
+  }
+  return item;
+}
+
+function formatCatalogTypeLabel(type) {
+  if (type === null || type === undefined) {
+    return 'Catálogo';
+  }
+
+  try {
+    return type
+      .toString()
+      .replace(/[_-]+/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/\b\w/g, function (char) { return char.toUpperCase(); });
+  } catch (error) {
+    return 'Catálogo';
+  }
+}
+
+function resolveCatalogTypeFilter(type) {
+  if (!type) {
+    return [];
+  }
+
+  const normalized = normalizeCatalogType(type);
+  const aliases = CATALOG_TYPE_ALIASES[normalized] || CATALOG_TYPE_ALIASES[type];
+  if (Array.isArray(aliases) && aliases.length) {
+    return Array.from(new Set(aliases.map(String)));
+  }
+
+  return [String(normalized)];
+}
+
 // ==================== MANEJADOR PRINCIPAL ====================
 
 /**
@@ -111,6 +175,9 @@ function handleCatalogRequest(body) {
       
       case 'catalog/getByType':
         return getCatalogByType(payload.type, payload.includeInactive);
+
+      case 'catalog/getTypes':
+        return getCatalogTypes();
       
       case 'catalog/getById':
         return getCatalogById(payload.id);
@@ -167,21 +234,32 @@ function handleCatalogRequest(body) {
  */
 function getAllCatalogs(type = null, includeInactive = false) {
   try {
-    console.log('getAllCatalogs called with:', { type, includeInactive });
+    const normalizedType = normalizeCatalogType(type);
+    console.log('getAllCatalogs called with:', { type, normalizedType, includeInactive });
     
     const sheet = getOrCreateCatalogSheet();
     console.log('Sheet obtained:', sheet ? sheet.getName() : 'null');
     
-    const catalogs = readSheetAsObjects(SYSTEM_CONFIG.SHEETS.CATALOG, false);
-    console.log('Raw catalogs from sheet:', catalogs.length, 'items');
-    console.log('First few catalog items:', catalogs.slice(0, 3));
-    
+    const rawCatalogs = readSheetAsObjects(SYSTEM_CONFIG.SHEETS.CATALOG, false);
+    console.log('Raw catalogs from sheet:', rawCatalogs.length, 'items');
+    console.log('First few catalog items:', rawCatalogs.slice(0, 3));
+
+    const catalogs = rawCatalogs.map(normalizeCatalogItem);
+
     let filtered = catalogs;
-    
+
     // Filtrar por tipo si se especifica
-    if (type) {
-      filtered = filtered.filter(item => item.catalogo === type);
-      console.log(`Filtered by type '${type}':`, filtered.length, 'items');
+    if (normalizedType) {
+      const allowedTypes = resolveCatalogTypeFilter(normalizedType);
+      filtered = filtered.filter(item => {
+        if (!item || item.catalogo === undefined || item.catalogo === null) {
+          return false;
+        }
+        const itemType = String(item.catalogo);
+        return allowedTypes.includes(itemType);
+      });
+      console.log(`Filtered by type '${normalizedType}' (aliases: ${allowedTypes.join(', ')}):`, filtered.length, 'items');
+
     }
     
     // Filtrar por estado si no se incluyen inactivos
@@ -209,7 +287,7 @@ function getAllCatalogs(type = null, includeInactive = false) {
       filtered, 
       `${filtered.length} elementos de catálogo obtenidos`,
       null,
-      { type: type, includeInactive: includeInactive }
+      { type: normalizedType, includeInactive: includeInactive }
     );
     
   } catch (error) {
@@ -224,11 +302,101 @@ function getAllCatalogs(type = null, includeInactive = false) {
  * @returns {Object} Catálogo del tipo especificado
  */
 function getCatalogByType(type, includeInactive = false) {
-  if (!type || !CATALOG_DEFINITIONS[type]) {
-    return formatResponse(false, null, '', `Tipo de catálogo '${type}' no válido`);
+  if (!type) {
+    return formatResponse(false, null, '', 'Tipo de catálogo requerido');
   }
   
   return getAllCatalogs(type, includeInactive);
+}
+
+/**
+ * Obtiene el listado de tipos de catálogo disponibles
+ * @returns {Object} Lista de tipos con metadatos básicos
+ */
+function getCatalogTypes() {
+  try {
+    const allCatalogs = getAllCatalogs(null, true);
+    if (!allCatalogs.success) return allCatalogs;
+
+    const items = Array.isArray(allCatalogs.data) ? allCatalogs.data : [];
+    const typeMap = {};
+
+    items.forEach(item => {
+      if (!item || !item.catalogo) return;
+      const type = item.catalogo;
+
+      if (!typeMap[type]) {
+        const definition = CATALOG_DEFINITIONS[type];
+        typeMap[type] = {
+          catalogo: type,
+          label: definition ? (definition.description || formatCatalogTypeLabel(type)) : formatCatalogTypeLabel(type),
+          description: definition ? definition.description : '',
+          has_parent: definition ? definition.hasParent === true : Boolean(item.parent_code && item.parent_code !== ''),
+          parent_type: definition && definition.parentType ? definition.parentType : '',
+          count: 0
+        };
+      }
+
+      typeMap[type].count += 1;
+    });
+
+    Object.keys(CATALOG_DEFINITIONS).forEach(type => {
+      if (typeMap[type]) return;
+      const definition = CATALOG_DEFINITIONS[type];
+      typeMap[type] = {
+        catalogo: type,
+        label: definition.description || formatCatalogTypeLabel(type),
+        description: definition.description || '',
+        has_parent: definition.hasParent === true,
+        parent_type: definition.parentType || '',
+        count: 0
+      };
+    });
+
+    const lineaLabel = 'Líneas de acción';
+    const legacyKey = 'linea';
+    const canonicalKey = 'linea_accion';
+    const legacyEntry = typeMap[legacyKey];
+    const canonicalEntry = typeMap[canonicalKey];
+
+    const ensureLineaLabel = (entry) => {
+      if (!entry) return;
+      entry.label = lineaLabel;
+      entry.description = lineaLabel;
+    };
+
+    ensureLineaLabel(canonicalEntry);
+    ensureLineaLabel(legacyEntry);
+
+    if (legacyEntry) {
+      if (canonicalEntry) {
+        const legacyCount = Number(legacyEntry.count) || 0;
+        canonicalEntry.count = (Number(canonicalEntry.count) || 0) + legacyCount;
+        if (!canonicalEntry.has_parent && legacyEntry.has_parent) {
+          canonicalEntry.has_parent = true;
+        }
+        if (!canonicalEntry.parent_type && legacyEntry.parent_type) {
+          canonicalEntry.parent_type = legacyEntry.parent_type;
+        }
+      } else {
+        typeMap[canonicalKey] = {
+          ...legacyEntry,
+          catalogo: canonicalKey,
+          label: lineaLabel,
+          description: lineaLabel
+        };
+      }
+      delete typeMap[legacyKey];
+    }
+
+    const responseData = Object.keys(typeMap)
+      .map(key => typeMap[key])
+      .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
+
+    return formatResponse(true, responseData, 'Tipos de catálogo disponibles');
+  } catch (error) {
+    return handleError(error, 'getCatalogTypes');
+  }
 }
 
 /**
@@ -248,7 +416,9 @@ function getCatalogById(id) {
       return formatResponse(false, null, '', `Elemento con ID '${id}' no encontrado`);
     }
     
-    return formatResponse(true, item, 'Elemento encontrado exitosamente');
+    return formatResponse(true, normalizeCatalogItem(item), 'Elemento encontrado exitosamente', null, {
+      rawCatalogo: item.catalogo
+    });
     
   } catch (error) {
     return handleError(error, 'getCatalogById');
@@ -272,7 +442,9 @@ function getCatalogByCode(code) {
       return formatResponse(false, null, '', `Elemento con código '${code}' no encontrado`);
     }
     
-    return formatResponse(true, item, 'Elemento encontrado exitosamente');
+    return formatResponse(true, normalizeCatalogItem(item), 'Elemento encontrado exitosamente', null, {
+      rawCatalogo: item.catalogo
+    });
     
   } catch (error) {
     return handleError(error, 'getCatalogByCode');
@@ -286,8 +458,8 @@ function getCatalogByCode(code) {
  * @returns {Object} Estructura jerárquica
  */
 function getCatalogHierarchy(type, rootCode = null) {
-  if (!type || !CATALOG_DEFINITIONS[type]) {
-    return formatResponse(false, null, '', `Tipo de catálogo '${type}' no válido`);
+  if (!type) {
+    return formatResponse(false, null, '', 'Tipo de catálogo requerido');
   }
   
   try {
@@ -339,8 +511,10 @@ function getCatalogHierarchy(type, rootCode = null) {
  */
 function createCatalogItem(data) {
   try {
+    const catalogoType = normalizeCatalogType(data.catalogo);
+    const preparedData = { ...data, catalogo: catalogoType };
     // Validar datos
-    const validation = validateCatalogData(data, 'create');
+    const validation = validateCatalogData(preparedData, 'create');
     if (!validation.valid) {
       return formatResponse(false, null, '', validation.errors);
     }
@@ -349,7 +523,7 @@ function createCatalogItem(data) {
     
     // Generar ID y código únicos
     const id = generateUUID();
-    const code = data.code || generateCatalogCode(data.catalogo, data.label);
+    const code = preparedData.code || generateCatalogCode(preparedData.catalogo, preparedData.label);
     
     // Verificar que el código sea único
     const existingByCode = findRowByField(SYSTEM_CONFIG.SHEETS.CATALOG, 'code', code);
@@ -358,21 +532,21 @@ function createCatalogItem(data) {
     }
     
     // Obtener siguiente orden si no se especifica
-    let sortOrder = data.sort_order;
+    let sortOrder = preparedData.sort_order;
     if (!sortOrder) {
-      const typeItems = getAllCatalogs(data.catalogo, true);
+      const typeItems = getAllCatalogs(preparedData.catalogo, true);
       sortOrder = typeItems.success ? typeItems.data.length + 1 : 1;
     }
     
     // Preparar datos completos
     const itemData = [
-      data.catalogo,                           // catalogo
+      preparedData.catalogo,                   // catalogo
       id,                                      // id  
       code,                                    // code
-      data.label || '',                        // label
-      data.parent_code || '',                  // parent_code
+      preparedData.label || '',                // label
+      preparedData.parent_code || '',          // parent_code
       sortOrder,                               // sort_order  
-      data.is_active !== false ? 'TRUE' : 'FALSE', // is_active
+      preparedData.is_active !== false ? 'TRUE' : 'FALSE', // is_active
       getCurrentTimestamp()                    // updated_at
     ];
     
@@ -381,19 +555,19 @@ function createCatalogItem(data) {
     
     // Preparar respuesta con datos completos
     const createdItem = {
-      catalogo: data.catalogo,
+      catalogo: preparedData.catalogo,
       id: id,
       code: code,
-      label: data.label,
-      parent_code: data.parent_code || '',
+      label: preparedData.label,
+      parent_code: preparedData.parent_code || '',
       sort_order: sortOrder,
-      is_active: data.is_active !== false,
+      is_active: preparedData.is_active !== false,
       updated_at: getCurrentTimestamp()
     };
     
     return formatResponse(
       true, 
-      createdItem, 
+      normalizeCatalogItem(createdItem), 
       'Elemento de catálogo creado exitosamente'
     );
     
@@ -419,24 +593,39 @@ function updateCatalogItem(id, updateData) {
     if (!existing.success) return existing;
     
     // Validar datos de actualización
-    const validation = validateCatalogData(updateData, 'update');
+    const normalizedUpdate = { ...updateData };
+    if (normalizedUpdate.catalogo !== undefined) {
+      normalizedUpdate.catalogo = normalizeCatalogType(normalizedUpdate.catalogo);
+    }
+
+    const validation = validateCatalogData(normalizedUpdate, 'update');
     if (!validation.valid) {
       return formatResponse(false, null, '', validation.errors);
     }
     
     // Si se actualiza el código, verificar unicidad
-    if (updateData.code && updateData.code !== existing.data.code) {
-      const existingByCode = findRowByField(SYSTEM_CONFIG.SHEETS.CATALOG, 'code', updateData.code);
+    if (normalizedUpdate.code && normalizedUpdate.code !== existing.data.code) {
+      const existingByCode = findRowByField(SYSTEM_CONFIG.SHEETS.CATALOG, 'code', normalizedUpdate.code);
       if (existingByCode && existingByCode.id !== id) {
-        return formatResponse(false, null, '', `Ya existe un elemento con código '${updateData.code}'`);
+        return formatResponse(false, null, '', `Ya existe un elemento con código '${normalizedUpdate.code}'`);
       }
     }
     
     // Preparar datos de actualización con timestamp
     const dataToUpdate = {
-      ...updateData,
+      ...normalizedUpdate,
       updated_at: getCurrentTimestamp()
     };
+
+    if (normalizedUpdate.catalogo === undefined) {
+      const existingRawType = existing.meta && existing.meta.rawCatalogo !== undefined
+        ? existing.meta.rawCatalogo
+        : existing.data.catalogo;
+      const canonicalExistingType = normalizeCatalogType(existingRawType);
+      if (canonicalExistingType && canonicalExistingType !== existingRawType) {
+        dataToUpdate.catalogo = canonicalExistingType;
+      }
+    }
     
     // Actualizar en la hoja
     const updated = updateRowByKey(SYSTEM_CONFIG.SHEETS.CATALOG, 'id', id, dataToUpdate);
@@ -447,7 +636,7 @@ function updateCatalogItem(id, updateData) {
     
     return formatResponse(
       true, 
-      { id: id, ...dataToUpdate }, 
+      normalizeCatalogItem({ id: id, ...dataToUpdate }), 
       'Elemento de catálogo actualizado exitosamente'
     );
     
@@ -524,13 +713,12 @@ function deactivateCatalogItem(id) {
  */
 function validateCatalogData(data, operation = 'create') {
   const errors = [];
+  const catalogoType = normalizeCatalogType(data.catalogo);
   
   // Validaciones para crear
   if (operation === 'create') {
-    if (!isNotEmpty(data.catalogo)) {
+    if (!isNotEmpty(catalogoType)) {
       errors.push('Tipo de catálogo es requerido');
-    } else if (!CATALOG_DEFINITIONS[data.catalogo]) {
-      errors.push(`Tipo de catálogo '${data.catalogo}' no válido`);
     }
     
     if (!isNotEmpty(data.label)) {
@@ -538,29 +726,27 @@ function validateCatalogData(data, operation = 'create') {
     }
   }
   
+  const definition = catalogoType ? CATALOG_DEFINITIONS[catalogoType] : null;
+
   // Validaciones comunes
-  if (data.catalogo && !CATALOG_DEFINITIONS[data.catalogo]) {
-    errors.push(`Tipo de catálogo '${data.catalogo}' no válido`);
-  }
-  
-  if (data.code && !/^[A-Z0-9_]{3,20}$/.test(data.code)) {
-    errors.push('Código debe contener solo letras mayúsculas, números y guiones bajos (3-20 caracteres)');
-  }
-  
-  if (data.sort_order && (isNaN(data.sort_order) || parseInt(data.sort_order) < 0)) {
+  if (data.sort_order !== undefined && data.sort_order !== null) {
+    if (isNaN(data.sort_order) || parseInt(data.sort_order, 10) < 0) {
     errors.push('Orden debe ser un número mayor o igual a 0');
-  }
-  
-  // Validar relación padre-hijo si aplica
-  if (data.catalogo && CATALOG_DEFINITIONS[data.catalogo].hasParent) {
-    if (operation === 'create' && !isNotEmpty(data.parent_code)) {
-      errors.push(`${CATALOG_DEFINITIONS[data.catalogo].description} requiere elemento padre`);
     }
   }
   
+  // Validar relación padre-hijo si aplica
+  if (definition && definition.hasParent) {
+    if (operation === 'create' && !isNotEmpty(data.parent_code)) {
+      errors.push(`${definition.description || formatCatalogTypeLabel(catalogoType)} requiere elemento padre`);
+    }
+  }
+  
+  const filteredErrors = errors.filter(error => !/^Código/i.test(error));
+
   return {
-    valid: errors.length === 0,
-    errors: errors
+    valid: filteredErrors.length === 0,
+    errors: filteredErrors
   };
 }
 
@@ -709,22 +895,23 @@ function validateCatalogIntegrity() {
       }
       
       // Verificar definición de catálogo
-      if (!CATALOG_DEFINITIONS[item.catalogo]) {
-        errors.push(`${item.code}: Tipo de catálogo '${item.catalogo}' no válido`);
-      } else {
-        const definition = CATALOG_DEFINITIONS[item.catalogo];
-        
-        // Verificar requerimiento de padre
+      const definition = item.catalogo ? CATALOG_DEFINITIONS[item.catalogo] : null;
+
+      if (definition) {
         if (definition.hasParent && !item.parent_code) {
           warnings.push(`${item.code}: Debería tener elemento padre según definición`);
         }
-        
-        // Verificar tipo correcto del padre
+
         if (definition.hasParent && item.parent_code && codeMap[item.parent_code]) {
           const parent = codeMap[item.parent_code];
-          if (parent.catalogo !== definition.parentType) {
+          if (definition.parentType && parent.catalogo !== definition.parentType) {
             errors.push(`${item.code}: Padre debería ser de tipo '${definition.parentType}' pero es '${parent.catalogo}'`);
           }
+        }
+      } else if (item.parent_code && codeMap[item.parent_code]) {
+        const parent = codeMap[item.parent_code];
+        if (parent.catalogo && parent.catalogo !== item.catalogo) {
+          warnings.push(`${item.code}: Código padre pertenece al catálogo '${parent.catalogo}'`);
         }
       }
       
@@ -771,8 +958,8 @@ function validateCatalogIntegrity() {
  * @returns {Object} Resultado de la operación
  */
 function reorderCatalogItems(type, ordering) {
-  if (!type || !CATALOG_DEFINITIONS[type]) {
-    return formatResponse(false, null, '', `Tipo de catálogo '${type}' no válido`);
+  if (!type) {
+    return formatResponse(false, null, '', 'Tipo de catálogo requerido');
   }
   
   if (!Array.isArray(ordering)) {

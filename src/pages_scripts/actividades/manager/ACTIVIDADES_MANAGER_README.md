@@ -95,7 +95,7 @@ API pública (export)
   - helpers: `obtenerCatalogosVacios`, `debeRestringirPorArea`, `coincideActividadConArea`, `aplicarRestriccionAreaEnListado`, `resolverValorCatalogo`, `obtenerItemCatalogo`...
 
 IDs/DOM usados
-- Selects: `area_id`, `subproceso_id`, `mipg_codigo`, `objetivo_id`, `estrategia_id`, `linea_id`, `fuente_financiacion`, `plan_id`, `filtro-area`, `filtro-plan`, `filtro-estado`.
+- Selects: `area_id`, `subproceso_id`, `mipg_codigo`, `objetivo_id`, `estrategia_id`, `linea_trabajo_id`, `linea_accion_id`, `fuente_financiacion`, `plan_id`, `filtro-area`, `filtro-plan`, `filtro-estado`.
 
 Comportamiento relevante
 - `cargarCatalogos` normaliza el payload del backend y rellena `this.state.catalogos`. Además llama a `sincronizarAreaUsuarioConCatalogos` y `poblarSelectsCatalogos`.

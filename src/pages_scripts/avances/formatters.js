@@ -124,7 +124,54 @@ export function parseNumericValue(value) {
   const text = value.toString().trim();
   if (!text) return null;
 
-  let sanitized = text.replace(/[\s$]/g, '').replace(/[^0-9,.-]/g, '');
+  const numericSegments = text.match(/-?\d[\d.,]*/g);
+  if (numericSegments && numericSegments.length) {
+    const parsedSegments = numericSegments
+      .map((segment, index) => ({
+        raw: segment,
+        parsed: normalizeNumberString(segment),
+        index
+      }))
+      .filter((entry) => entry.parsed !== null);
+
+    if (parsedSegments.length) {
+      if (parsedSegments.length > 1) {
+        const currentYear = new Date().getFullYear();
+        const filtered = parsedSegments.filter(
+          (entry) => !isLikelyYearToken(
+            entry.raw,
+            entry.parsed,
+            currentYear,
+            entry.index,
+            parsedSegments.length
+          )
+        );
+        if (filtered.length) {
+          return filtered[0].parsed;
+        }
+      }
+      return parsedSegments[0].parsed;
+    }
+  }
+
+  return normalizeNumberString(text);
+}
+
+function softenNumberSpacing(text) {
+  if (!text) return text;
+  return text
+    .replace(/\u00A0/g, ' ')
+    .replace(/(\d)\.(?=\d{3}(?:\D|$))/g, '$1.\u2009');
+}
+
+function normalizeNumberString(input) {
+  if (input === null || input === undefined) return null;
+  let sanitized = input
+    .toString()
+    .trim()
+    .replace(/[\s\u00A0$]/g, '')
+    .replace(/[^0-9,.-]/g, '');
+
   if (!sanitized) return null;
 
   const lastComma = sanitized.lastIndexOf(',');
@@ -151,9 +198,15 @@ export function parseNumericValue(value) {
   return Number.isFinite(num) ? num : null;
 }
 
-function softenNumberSpacing(text) {
-  if (!text) return text;
-  return text
-    .replace(/\u00A0/g, ' ')
-    .replace(/(\d)\.(?=\d{3}(?:\D|$))/g, '$1.\u2009');
+function isLikelyYearToken(raw, parsedValue, currentYear, index, totalSegments) {
+  if (!Number.isInteger(parsedValue)) return false;
+  if (parsedValue < 1900 || parsedValue > currentYear + 10) return false;
+  const trimmed = raw ? raw.trim() : '';
+  if (!trimmed) return false;
+  const coreToken = trimmed.replace(/^[^0-9-]+|[^0-9-]+$/g, '');
+  if (!/^\d{4}$/.test(coreToken)) return false;
+  if (totalSegments > 1 && index === totalSegments - 1) {
+    return true;
+  }
+  return /año|vigencia|periodo|período|ano/i.test(trimmed);
 }

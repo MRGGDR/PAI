@@ -23,23 +23,24 @@ const ACTIVITY_HEADERS = [
   'codigo',                 // B - Código identificador único de la actividad
   'area',                   // C - Nombre del área (label del catálogo)
   'subproceso',             // D - Nombre del subproceso (label del catálogo)
-  'mipg',                   // E - Dimensión MIPG (label del catálogo)
-  'linea',                  // F - Nombre de línea de acción (label del catálogo)
-  'descripcion_actividad',  // G - Descripción de la actividad
-  'indicador',              // H - Nombre del indicador (label del catálogo)
-  'meta_valor',             // I - Valor numérico de la meta del indicador
-  'meta_texto',             // J - Descripción de la meta sin incluir el valor numérico
-  'presupuesto_programado', // K - Presupuesto programado
-  'fuente',                 // L - Fuente de financiación (label del catálogo)
-  'plan',                   // M - Planes asociados (separados por comas)
-  'riesgos',                // N - Riesgos identificados para la actividad
-  'responsable',            // O - Responsable de la actividad
-  'fecha_inicio_planeada',  // P - Fecha de inicio planeada
-  'fecha_fin_planeada',     // Q - Fecha de fin planeada
-  'estado',                 // R - Estado operativo de la actividad
-  'creado_por',             // S - Email del usuario que creó la actividad
-  'creado_el',              // T - Fecha de creación
-  'actualizado_el'          // U - Fecha de última actualización
+  'linea_trabajo',          // E - Línea de trabajo (label del catálogo)
+  'mipg',                   // F - Dimensión MIPG (label del catálogo)
+  'linea_accion',           // G - Línea de acción (label del catálogo)
+  'descripcion_actividad',  // H - Descripción de la actividad
+  'indicador',              // I - Nombre del indicador (label del catálogo o texto libre)
+  'meta_valor',             // J - Valor numérico de la meta del indicador
+  'meta_texto',             // K - Descripción de la meta sin incluir el valor numérico
+  'presupuesto_programado', // L - Presupuesto programado
+  'fuente',                 // M - Fuente de financiación (label del catálogo)
+  'plan',                   // N - Planes asociados (separados por comas)
+  'riesgos',                // O - Riesgos identificados para la actividad
+  'responsable',            // P - Responsable de la actividad
+  'fecha_inicio_planeada',  // Q - Fecha de inicio planeada
+  'fecha_fin_planeada',     // R - Fecha de fin planeada
+  'estado',                 // S - Estado operativo de la actividad
+  'creado_por',             // T - Email del usuario que creó la actividad
+  'creado_el',              // U - Fecha de creación
+  'actualizado_el'          // V - Fecha de última actualización
 ];
 
 const AREA_ACRONYM_ENTRIES = [
@@ -278,6 +279,9 @@ function generateActivityCode(sheet, context) {
 const FORM_FIELD_MAPPING = {
   'subproceso_id': 'subproceso_id',
   'mipg': 'mipg',
+  'linea_trabajo_id': 'linea_trabajo_id',
+  'linea_trabajo': 'linea_trabajo',
+  'linea_accion_id': 'linea_id',
   'linea_id': 'linea_id',
   'descripcion_actividad': 'descripcion_actividad',
   'indicador_id': 'indicador_id',
@@ -463,9 +467,21 @@ function normalizeActivityRecord(activity, fallback) {
     return activity;
   }
 
+  var estadoRevisionNormalizado = normalizeReviewStateValue(activity.estado_revision);
+  if (!estadoRevisionNormalizado && fallback && typeof fallback === 'object') {
+    estadoRevisionNormalizado = normalizeReviewStateValue(fallback.estado_revision);
+  }
+
+  var estadoNormalizado = normalizeReviewStateValue(activity.estado);
+  if (!estadoNormalizado && estadoRevisionNormalizado) {
+    estadoNormalizado = estadoRevisionNormalizado;
+  }
+
   const metaInfo = extractMetaComponents(activity, fallback);
   return {
     ...activity,
+    estado: estadoNormalizado || activity.estado || '',
+    estado_revision: estadoRevisionNormalizado || activity.estado_revision || '',
     meta_valor: metaInfo.valor,
     meta_texto: metaInfo.texto,
     meta_texto_completo: metaInfo.display,
@@ -968,6 +984,13 @@ function createActivity(data) {
     }
 
   const indicadorTexto = (data.indicador || data.indicador_detalle || data.indicador_texto || '').toString().trim();
+  const defaultReviewState = (SYSTEM_CONFIG.REVIEW_STATES && SYSTEM_CONFIG.REVIEW_STATES.length)
+    ? SYSTEM_CONFIG.REVIEW_STATES[0]
+    : 'Sin revisión';
+  const estadoInicial = normalizeReviewStateValue(data.estado || defaultReviewState) || defaultReviewState;
+  const estadoRevisionInicial = normalizeReviewStateValue(
+    data.estado_revision || data.estadoRevision || estadoInicial
+  ) || defaultReviewState;
 
   const completeData = {
     actividad_id: activityId,
@@ -977,7 +1000,12 @@ function createActivity(data) {
       subproceso_id: data.subproceso_id || '',
       objetivo_id: data.objetivo_id || '',
       estrategia_id: data.estrategia_id || '', 
-      linea_id: data.linea_id || '',
+      linea_trabajo_id: data.linea_trabajo_id || data.linea_trabajo_codigo || '',
+      linea_trabajo: data.linea_trabajo || '',
+      linea_accion_id: data.linea_accion_id || data.linea_id || '',
+      linea_accion: data.linea_accion || data.linea || '',
+      linea_id: data.linea_accion_id || data.linea_id || '',
+      linea: data.linea_accion || data.linea || '',
       indicador_id: data.indicador_id || '',
       indicador: indicadorTexto,
       indicador_detalle: indicadorTexto,
@@ -995,7 +1023,11 @@ function createActivity(data) {
   fuente_nombre: fuenteSelection.label || data.fuente_nombre || data.fuente || '',
       usuario: data.usuario || 'sistema',
       creado_por: userEmail, // Usar el email determinado correctamente
-    estado: data.estado || 'Planeada',
+    estado: estadoInicial,
+    estado_revision: estadoRevisionInicial,
+    revision_comentarios: '',
+    revision_fecha: '',
+    revision_por: '',
   // Guardar timestamps de auditoría como fecha-only (YYYY-MM-DD)
   creado_el: getCurrentDateOnly(),
   actualizado_el: getCurrentDateOnly()
@@ -1049,18 +1081,37 @@ function createActivity(data) {
       dataForSheet.area = '';
     }
     
-    // Resolver línea de acción
-    if (data.linea_id) {
-      const lineaResult = getCatalogByCode(data.linea_id);
-      if (lineaResult.success) {
-  console.log(` [OK] Línea resuelta: ${data.linea_id} -> ${lineaResult.data.label}`);
-        dataForSheet.linea = lineaResult.data.label;
+    // Resolver línea de trabajo
+    const lineaTrabajoCodigo = data.linea_trabajo_id || data.linea_trabajo_codigo;
+    if (lineaTrabajoCodigo) {
+      const lineaTrabajoResult = getCatalogByCode(lineaTrabajoCodigo);
+      if (lineaTrabajoResult.success) {
+        console.log(` [OK] Línea de trabajo resuelta: ${lineaTrabajoCodigo} -> ${lineaTrabajoResult.data.label}`);
+        dataForSheet.linea_trabajo = lineaTrabajoResult.data.label;
       } else {
-  console.log(` [ERROR] No se pudo resolver línea: ${data.linea_id}`);
-        dataForSheet.linea = data.linea_id; // fallback al código
+        console.log(` [ERROR] No se pudo resolver línea de trabajo: ${lineaTrabajoCodigo}`);
+        dataForSheet.linea_trabajo = lineaTrabajoCodigo;
       }
     } else {
-      dataForSheet.linea = '';
+      dataForSheet.linea_trabajo = data.linea_trabajo || '';
+    }
+
+    // Resolver línea de acción
+    const lineaAccionCodigo = data.linea_accion_id || data.linea_id;
+    if (lineaAccionCodigo) {
+      const lineaResult = getCatalogByCode(lineaAccionCodigo);
+      if (lineaResult.success) {
+        console.log(` [OK] Línea de acción resuelta: ${lineaAccionCodigo} -> ${lineaResult.data.label}`);
+        dataForSheet.linea_accion = lineaResult.data.label;
+        dataForSheet.linea = lineaResult.data.label;
+      } else {
+        console.log(` [ERROR] No se pudo resolver línea de acción: ${lineaAccionCodigo}`);
+        dataForSheet.linea_accion = lineaAccionCodigo;
+        dataForSheet.linea = lineaAccionCodigo;
+      }
+    } else {
+      dataForSheet.linea_accion = data.linea_accion || data.linea || '';
+      dataForSheet.linea = dataForSheet.linea_accion;
     }
     
     // Resolver indicador priorizando el texto ingresado por el usuario
@@ -1244,15 +1295,18 @@ function getAllActivities(filters = {}) {
       ? SYSTEM_CONFIG.REVIEW_STATES[0]
       : 'Sin revisión';
     const activities = readSheetAsObjects(SYSTEM_CONFIG.SHEETS.ACTIVITIES, false).map(activity => {
+      const estadoRevision = normalizeReviewStateValue(activity.estado_revision || defaultReviewState) || defaultReviewState;
+      const estadoGeneral = normalizeReviewStateValue(activity.estado || estadoRevision) || activity.estado || estadoRevision || defaultReviewState;
       const planSelection = resolvePlanSelection(activity);
       const enriched = {
         ...activity,
+        estado: estadoGeneral,
+        estado_revision: estadoRevision,
         plan: planSelection.labelString || activity.plan || '',
         plan_display: planSelection.labelString || activity.plan || '',
         plan_ids: planSelection.ids,
         plan_id: planSelection.ids.length ? planSelection.ids[0] : '',
         plan_labels: planSelection.labels,
-        estado_revision: activity.estado_revision || defaultReviewState,
         revision_comentarios: activity.revision_comentarios || '',
         revision_fecha: activity.revision_fecha || '',
         revision_por: activity.revision_por || ''
@@ -1606,10 +1660,21 @@ function enrichActivityWithCatalogData(activityData) {
       }
     }
     
+    // Derivar línea de trabajo
+    const lineaTrabajoCodigo = activityData.linea_trabajo_id || activityData.linea_trabajo_codigo;
+    if (lineaTrabajoCodigo) {
+      const lineaTrabajo = getCatalogByCode(lineaTrabajoCodigo);
+      if (lineaTrabajo.success) {
+        enriched.linea_trabajo_nombre = lineaTrabajo.data.label;
+      }
+    }
+
     // Derivar estrategia y objetivo desde línea de acción
-    if (activityData.linea_id) {
-      const linea = getCatalogByCode(activityData.linea_id);
+    const lineaAccionCodigo = activityData.linea_accion_id || activityData.linea_id;
+    if (lineaAccionCodigo) {
+      const linea = getCatalogByCode(lineaAccionCodigo);
       if (linea.success) {
+        enriched.linea_accion_nombre = linea.data.label;
         enriched.linea_nombre = linea.data.label;
         
         // Derivar estrategia
@@ -1657,7 +1722,11 @@ function prepareActivityData(activityId, data, operation) {
   prepared.actividad_id = activityId;
   prepared.subproceso_id = data.subproceso_id || '';
   prepared.mipg = data.mipg || '';
-  prepared.linea_id = data.linea_id || '';
+  prepared.linea_trabajo_id = data.linea_trabajo_id || data.linea_trabajo_codigo || '';
+  prepared.linea_trabajo = data.linea_trabajo || '';
+  prepared.linea_accion_id = data.linea_accion_id || data.linea_id || '';
+  prepared.linea_accion = data.linea_accion || data.linea || '';
+  prepared.linea_id = prepared.linea_accion_id;
   prepared.descripcion_actividad = data.descripcion_actividad || '';
   prepared.indicador_id = data.indicador_id || '';
   prepared.indicador = (data.indicador || data.indicador_detalle || data.indicador_texto || '').toString().trim();
@@ -1702,7 +1771,9 @@ function prepareActivityData(activityId, data, operation) {
   prepared.subproceso_nombre = data.subproceso_nombre || '';
   prepared.objetivo_nombre = data.objetivo_nombre || '';
   prepared.estrategia_nombre = data.estrategia_nombre || '';
-  prepared.linea_nombre = data.linea_nombre || '';
+  prepared.linea_trabajo_nombre = data.linea_trabajo_nombre || data.linea_trabajo || '';
+  prepared.linea_accion_nombre = data.linea_accion_nombre || data.linea_nombre || data.linea || '';
+  prepared.linea_nombre = prepared.linea_accion_nombre;
 
   return prepared;
 }
@@ -2008,7 +2079,8 @@ function updateActivityReviewStatus(payload) {
       return formatResponse(false, null, '', 'ID de actividad requerido');
     }
 
-    if (!nuevoEstado || !isValidReviewState(nuevoEstado)) {
+    const estadoNormalizado = normalizeReviewStateValue(nuevoEstado);
+    if (!estadoNormalizado || !isValidReviewState(estadoNormalizado)) {
       return formatResponse(false, null, '', `Estado de revisión inválido. Debe ser uno de: ${(SYSTEM_CONFIG.REVIEW_STATES || []).join(', ')}`);
     }
 
@@ -2018,9 +2090,12 @@ function updateActivityReviewStatus(payload) {
     }
 
     const ahoraTimestamp = getCurrentTimestamp();
+    const comentariosTexto = comentarios ? comentarios.toString().trim() : '';
+    const estadosQueNotifican = ['Corrección', 'En revisión', 'Aprobado', 'Cancelado'];
     const reviewData = {
-      estado_revision: nuevoEstado,
-      revision_comentarios: comentarios,
+      estado_revision: estadoNormalizado,
+      estado: estadoNormalizado,
+      revision_comentarios: comentariosTexto,
       revision_fecha: ahoraTimestamp,
       revision_por: revisor,
       actualizado_el: getCurrentDateOnly()
@@ -2037,13 +2112,13 @@ function updateActivityReviewStatus(payload) {
       return formatResponse(false, null, '', 'No fue posible actualizar la actividad');
     }
 
-    const actividadActualizada = { ...actual.data, ...reviewData };
+    const actividadActualizada = normalizeActivityRecord({ ...actual.data, ...reviewData }, actual.data);
 
-    if (notificar && ['Corrección requerida', 'Rechazada'].includes(nuevoEstado)) {
-      sendActivityReviewNotification(actividadActualizada, nuevoEstado, comentarios, revisor);
+    if (notificar && estadosQueNotifican.indexOf(estadoNormalizado) !== -1) {
+      sendActivityReviewNotification(actividadActualizada, estadoNormalizado, comentariosTexto, revisor);
     }
 
-    return formatResponse(true, actividadActualizada, 'Estado de revisión actualizado correctamente');
+    return formatResponse(true, actividadActualizada, `Estado actualizado a ${estadoNormalizado}`);
 
   } catch (error) {
     return handleError(error, 'updateActivityReviewStatus');
@@ -2057,33 +2132,194 @@ function updateActivityReviewStatus(payload) {
  * @param {string} comentarios - Comentarios del revisor
  * @param {string} revisor - Email del revisor
  */
+function resolveActivityRecipientEmail(actividad) {
+  if (!actividad || typeof actividad !== 'object') {
+    return '';
+  }
+
+  const candidatos = [];
+
+  if (actividad.responsable && typeof actividad.responsable === 'object') {
+    if (actividad.responsable.email) candidatos.push(actividad.responsable.email);
+    if (actividad.responsable.correo) candidatos.push(actividad.responsable.correo);
+  }
+
+  candidatos.push(
+    actividad.responsable_correo,
+    actividad.responsable_email,
+    actividad.responsableCorreo,
+    actividad.responsableEmail,
+    actividad.responsable,
+    actividad.responsable_nombre,
+    actividad.creado_por,
+    actividad.usuario,
+    actividad.email
+  );
+
+  for (var i = 0; i < candidatos.length; i++) {
+    var candidato = candidatos[i];
+    if (!candidato) continue;
+    if (typeof candidato !== 'string') {
+      candidato = candidato.toString();
+    }
+    var trimmed = candidato.trim();
+    if (trimmed && trimmed.indexOf('@') !== -1) {
+      return trimmed;
+    }
+  }
+
+  return '';
+}
+
+function getActivityPreferredCode(actividad) {
+  if (!actividad || typeof actividad !== 'object') {
+    return '';
+  }
+
+  const candidatos = [
+    actividad.codigo,
+    actividad.codigo_actividad,
+    actividad.codigoActividad,
+    actividad.actividad_codigo,
+    actividad.actividadCodigo,
+    actividad.codigo_pai,
+    actividad.codigoPai,
+    actividad.actividad_id,
+    actividad.id
+  ];
+
+  for (var i = 0; i < candidatos.length; i++) {
+    var candidato = candidatos[i];
+    if (candidato === null || candidato === undefined) continue;
+    var valor = candidato.toString().trim();
+    if (valor) {
+      return valor;
+    }
+  }
+
+  return '';
+}
+
+function escapeHtml(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return value
+    .toString()
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildActivityStatusEmailContent(actividad, estado, comentarios, revisor, codigoActividad) {
+  const descripcion = actividad?.descripcion_actividad || actividad?.descripcion || actividad?.nombre || 'Actividad sin descripción';
+  const area = actividad?.area || actividad?.area_nombre || actividad?.areaNombre || '';
+  const areaHtml = area ? ` del área <strong>${escapeHtml(area)}</strong>` : '';
+  const areaText = area ? ` del área ${area}` : '';
+  const canonicalEstado = normalizeReviewStateValue(estado) || estado || 'Sin revisión';
+  const comentariosTexto = comentarios ? comentarios.toString().trim() : '';
+  const comentariosHtml = comentariosTexto ? escapeHtml(comentariosTexto).replace(/\r?\n/g, '<br>') : '';
+
+  const htmlParts = [];
+  const textParts = [];
+
+  htmlParts.push('<p>Hola,</p>');
+  textParts.push('Hola,');
+
+  switch (canonicalEstado) {
+    case 'Corrección':
+      htmlParts.push(`<p>La actividad <strong>${escapeHtml(descripcion)}</strong>${areaHtml} requiere correcciones para continuar con el proceso de aprobación.</p>`);
+      htmlParts.push('<p>Por favor revisa las observaciones y actualiza la información en el gestor de actividades.</p>');
+      textParts.push(`La actividad "${descripcion}"${areaText} requiere correcciones para continuar con el proceso de aprobación.`);
+      textParts.push('Por favor revisa las observaciones y actualiza la información en el gestor de actividades.');
+      break;
+    case 'En revisión':
+      htmlParts.push(`<p>La actividad <strong>${escapeHtml(descripcion)}</strong>${areaHtml} fue marcada como <strong>En revisión</strong>. El equipo administrador está evaluando la información reportada.</p>`);
+      htmlParts.push('<p>No se requieren acciones adicionales en este momento. Te contactaremos si se necesitan cambios.</p>');
+      textParts.push(`La actividad "${descripcion}"${areaText} fue marcada como "En revisión". El equipo administrador está evaluando la información reportada.`);
+      textParts.push('No se requieren acciones adicionales en este momento. Te contactaremos si se necesitan cambios.');
+      break;
+    case 'Aprobado':
+      htmlParts.push(`<p>La actividad <strong>${escapeHtml(descripcion)}</strong>${areaHtml} fue <strong>aprobada</strong>.</p>`);
+      htmlParts.push('<p>Gracias por mantener la información actualizada en el sistema.</p>');
+      textParts.push(`La actividad "${descripcion}"${areaText} fue aprobada.`);
+      textParts.push('Gracias por mantener la información actualizada en el sistema.');
+      break;
+    case 'Cancelado':
+      htmlParts.push(`<p>La actividad <strong>${escapeHtml(descripcion)}</strong>${areaHtml} fue marcada como <strong>Cancelado</strong>.</p>`);
+      htmlParts.push('<p>No es necesario continuar con gestiones adicionales relacionadas con esta actividad.</p>');
+      textParts.push(`La actividad "${descripcion}"${areaText} fue marcada como cancelada.`);
+      textParts.push('No es necesario continuar con gestiones adicionales relacionadas con esta actividad.');
+      break;
+    default:
+      htmlParts.push(`<p>La actividad <strong>${escapeHtml(descripcion)}</strong>${areaHtml} cambió al estado <strong>${escapeHtml(canonicalEstado)}</strong>.</p>`);
+      textParts.push(`La actividad "${descripcion}"${areaText} cambió al estado "${canonicalEstado}".`);
+      break;
+  }
+
+  if (comentariosHtml) {
+    htmlParts.push('<p>Observaciones del equipo revisor:</p>');
+    htmlParts.push(`<blockquote style="border-left:3px solid #4f46e5;padding-left:12px;color:#374151;">${comentariosHtml}</blockquote>`);
+    textParts.push('Observaciones del equipo revisor:');
+    textParts.push(comentariosTexto);
+  }
+
+  if (codigoActividad) {
+    htmlParts.push(`<p>Código de la actividad: <strong>${escapeHtml(codigoActividad)}</strong></p>`);
+    textParts.push(`Código de la actividad: ${codigoActividad}`);
+  }
+
+  if (revisor && revisor.indexOf('@') !== -1) {
+    htmlParts.push(`<p>Revisión registrada por: <strong>${escapeHtml(revisor)}</strong></p>`);
+    textParts.push(`Revisión registrada por: ${revisor}`);
+  }
+
+  htmlParts.push('<p>Gracias por tu gestión.</p>');
+  htmlParts.push('<p>&mdash; Sistema PAI UNGRD</p>');
+  textParts.push('Gracias por tu gestión.');
+  textParts.push('-- Sistema PAI UNGRD');
+
+  return {
+    htmlBody: htmlParts.join(''),
+    textBody: textParts.join('\n\n')
+  };
+}
+
 function sendActivityReviewNotification(actividad, estado, comentarios, revisor) {
   try {
-    const destinatario = (actividad?.responsable || actividad?.creado_por || '').toString().trim();
-    if (!destinatario || destinatario.indexOf('@') === -1) {
+    const destinatario = resolveActivityRecipientEmail(actividad);
+    if (!destinatario) {
       console.warn('sendActivityReviewNotification: destinatario no válido', destinatario);
       return;
     }
 
-    const asunto = `Revisión requerida para la actividad ${actividad.actividad_id || ''}`.trim();
-    const nombreActividad = actividad?.descripcion_actividad || 'Actividad sin descripción';
-    const area = actividad?.area || actividad?.area_nombre || '';
+    const codigoActividad = getActivityPreferredCode(actividad);
+    const estadoLabel = normalizeReviewStateValue(estado) || estado || 'Sin revisión';
+    const asunto = codigoActividad
+      ? `${codigoActividad} "${estadoLabel}"`
+      : `Actividad "${estadoLabel}"`;
 
-    const htmlBody = `
-      <p>Estimado/a ${destinatario},</p>
-      <p>La actividad <strong>${nombreActividad}</strong>${area ? ` del área <strong>${area}</strong>` : ''} fue marcada con el estado <strong>${estado}</strong>.</p>
-      ${comentarios ? `<p>Comentarios del revisor:</p><blockquote style="border-left:3px solid #4f46e5;padding-left:12px;color:#374151;">${comentarios}</blockquote>` : ''}
-      <p>Por favor realiza los ajustes necesarios y vuelve a enviar la actividad para revisión.</p>
-      ${revisor ? `<p>Revisión realizada por: <strong>${revisor}</strong></p>` : ''}
-  <p>&mdash; Sistema PAI UNGRD</p>
-    `;
+    const contenido = buildActivityStatusEmailContent(actividad, estadoLabel, comentarios, revisor, codigoActividad);
 
-    MailApp.sendEmail({
+    const mailOptions = {
       to: destinatario,
       subject: asunto,
-      htmlBody: htmlBody,
+      htmlBody: contenido.htmlBody,
+      body: contenido.textBody,
       name: 'Sistema PAI UNGRD'
-    });
+    };
+
+    if (revisor && typeof revisor === 'string' && revisor.indexOf('@') !== -1) {
+      mailOptions.replyTo = revisor;
+      if (revisor !== destinatario) {
+        mailOptions.cc = revisor;
+      }
+    }
+
+    MailApp.sendEmail(mailOptions);
   } catch (error) {
     console.error('sendActivityReviewNotification error:', error);
   }

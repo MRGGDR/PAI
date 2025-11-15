@@ -4,6 +4,8 @@
  * permitiendo una interacción más rica con el usuario.
  */
 
+import './debug-filter.js';
+
 const TOAST_THEMES = {
 	success: {
 		icon: '\u2705',

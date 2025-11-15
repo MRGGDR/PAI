@@ -2,7 +2,73 @@
  * cardsManager.js - Gestión de vista de tarjetas para actividades
  */
 
-import { formatearFecha } from './utils.js';
+import {
+  formatearFecha,
+  normalizarEstadoActividad,
+  obtenerClaseEstadoActividad,
+  normalizarEstadoRevision,
+  obtenerClaseEstadoRevision,
+  ESTADOS_REVISION
+} from './utils.js';
+import { RIESGO_SEMAFORO_CONFIG } from './manager/constants.js';
+
+function normalizeRiskPercent(value) {
+  if (value && typeof value === 'object' && value.percent !== undefined) {
+    return normalizeRiskPercent(value.percent);
+  }
+
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const text = value.toString().trim();
+  if (!text) {
+    return null;
+  }
+
+  const sanitized = text
+    .replace(/%/g, '')
+    .replace(/\s+/g, '')
+    .replace(/,/g, '.')
+    .replace(/[^0-9.+-]/g, '');
+
+  if (!sanitized) {
+    return null;
+  }
+
+  const number = Number(sanitized);
+  if (!Number.isFinite(number)) {
+    return null;
+  }
+
+  const bounded = Math.min(100, Math.max(0, number));
+  return Math.round(bounded * 100) / 100;
+}
+
+function resolveRiskConfig(value) {
+  const percent = normalizeRiskPercent(value);
+  if (percent === null) {
+    return {
+      id: '',
+      label: 'Sin clasificar',
+      percent: null,
+      rangeLabel: '0% - 100%',
+      chipClass: 'riesgo-chip--neutral',
+      helperClass: 'riesgo-porcentaje-helper--neutral'
+    };
+  }
+
+  const config = RIESGO_SEMAFORO_CONFIG.find(item => percent >= item.min && percent <= item.max)
+    || RIESGO_SEMAFORO_CONFIG[RIESGO_SEMAFORO_CONFIG.length - 1];
+
+  return {
+    ...config,
+    percent,
+    rangeLabel: `${config.min}% - ${config.max}%`,
+    chipClass: `riesgo-chip--${config.id}`,
+    helperClass: `riesgo-porcentaje-helper--${config.id}`
+  };
+}
 
 /**
  * Gestiona la vista de tarjetas de actividades
@@ -151,7 +217,7 @@ class CardsManager {
               ${this.renderCodigo(item.codigo)}
             </div>
             <div class="flex items-center gap-2">
-              ${this.renderEstado(item.estadoNombre)}
+              ${this.renderEstado(item)}
               ${this.renderAcciones(item)}
             </div>
           </div>
@@ -262,25 +328,40 @@ class CardsManager {
     `;
   }
   
-  renderEstado(estado) {
-    if (!estado || typeof estado !== 'string') return '';
-    
-    const normalizado = estado.toLowerCase();
-    let classes = 'bg-gray-100 text-gray-800 border-gray-300';
-    
-    if (normalizado.includes('complet')) {
-      classes = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-    } else if (normalizado.includes('progreso')) {
-      classes = 'bg-sky-100 text-sky-800 border-sky-300';
-    } else if (normalizado.includes('suspend')) {
-      classes = 'bg-amber-100 text-amber-800 border-amber-300';
-    } else if (normalizado.includes('cancel')) {
-      classes = 'bg-rose-100 text-rose-800 border-rose-300';
+  renderEstado(estadoEntrada) {
+    if (!estadoEntrada) return '';
+
+    const candidatos = [];
+    if (typeof estadoEntrada === 'string') {
+      candidatos.push(estadoEntrada);
+    } else {
+      candidatos.push(
+        estadoEntrada.estadoNombre,
+        estadoEntrada.estadoRevisionNombre,
+        estadoEntrada.estadoActividadNombre,
+        estadoEntrada.estadoId,
+        estadoEntrada.raw?.estado_revision,
+        estadoEntrada.raw?.estadoRevision,
+        estadoEntrada.raw?.estado_revision_nombre,
+        estadoEntrada.raw?.estado,
+        estadoEntrada.raw?.estadoNombre
+      );
     }
-    
+
+    const bruto = candidatos.find(valor => typeof valor === 'string' && valor.trim()) || 'Sin revisión';
+    const canonicalRevision = normalizarEstadoRevision(bruto);
+    const canonicalActividad = normalizarEstadoActividad(bruto);
+    const usarRevision = ESTADOS_REVISION.includes(canonicalRevision);
+    const display = usarRevision
+      ? canonicalRevision
+      : canonicalActividad || canonicalRevision || bruto || 'Sin revisión';
+    const classes = usarRevision
+      ? obtenerClaseEstadoRevision(display, 'badge')
+      : obtenerClaseEstadoActividad(display, 'badge');
+
     return `
-      <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border ${classes}">
-        ${estado}
+      <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${classes}">
+        ${this.escapeHtml(display)}
       </span>
     `;
   }
@@ -389,6 +470,37 @@ class CardsManager {
         ${this.escapeHtml(label)}
       </span>
     `;
+  }
+
+  updateRiesgoModal(item) {
+    const chip = document.getElementById('modal-riesgo-chip');
+    const chipLabel = chip ? chip.querySelector('.riesgo-chip__label') : null;
+    const percentNode = document.getElementById('modal-riesgo-porcentaje');
+
+    const info = resolveRiskConfig(
+      (item && item.riesgoSemaforo) ||
+      (item && item.riesgoPorcentaje) ||
+      (item && item.raw && (item.raw.riesgo_porcentaje ?? item.raw.riesgoPorcentaje)) ||
+      null
+    );
+
+    if (chip) {
+      ['riesgo-chip--neutral', 'riesgo-chip--bajo', 'riesgo-chip--moderado', 'riesgo-chip--alto', 'riesgo-chip--critico']
+        .forEach(clase => chip.classList.remove(clase));
+      chip.classList.add(info.chipClass || 'riesgo-chip--neutral');
+      if (chipLabel) {
+        chipLabel.textContent = info.label;
+      }
+    }
+
+    if (percentNode) {
+      ['riesgo-porcentaje-helper--neutral', 'riesgo-porcentaje-helper--bajo', 'riesgo-porcentaje-helper--moderado', 'riesgo-porcentaje-helper--alto', 'riesgo-porcentaje-helper--critico']
+        .forEach(clase => percentNode.classList.remove(clase));
+      percentNode.classList.add(info.helperClass || 'riesgo-porcentaje-helper--neutral');
+      percentNode.textContent = info.percent === null
+        ? 'Sin porcentaje'
+        : `${info.percent}% (${info.rangeLabel})`;
+    }
   }
 
   formatNumber(value, options = {}) {
@@ -759,7 +871,7 @@ class CardsManager {
           
           <!-- Estado -->
           <div class="flex items-center gap-2">
-            ${this.renderEstado(item.estadoNombre)}
+            ${this.renderEstado(item)}
           </div>
           
           <!-- Meta -->
@@ -793,7 +905,7 @@ class CardsManager {
     
     // Estado (legacy - mantener por compatibilidad)
     const estadoContainer = document.getElementById('modal-estado-container');
-    if (estadoContainer) estadoContainer.innerHTML = this.renderEstado(item.estadoNombre);
+    if (estadoContainer) estadoContainer.innerHTML = this.renderEstado(item);
     
     // Descripción (legacy - mantener por compatibilidad)
     const descripcion = document.getElementById('modal-descripcion');
@@ -836,6 +948,7 @@ class CardsManager {
         riesgosContainer.innerHTML = sanitized;
       }
     }
+    this.updateRiesgoModal(item);
     
     // Indicador
     const indicadorContainer = document.getElementById('modal-indicador-container');

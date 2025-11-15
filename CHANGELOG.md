@@ -91,5 +91,3 @@ npm run changelog
 - Punto de partida del proyecto; aún no se conectaba a fuentes de datos reales.
 
 ---
-
-

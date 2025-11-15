@@ -4,12 +4,230 @@ import { showLoaderDuring } from '../../../lib/loader.js';
 import { CATALOG_LABELS, ADMIN_LOADER_MESSAGE } from './constants.js';
 
 export const catalogMethods = {
+  initializeCatalogModule() {
+    this.loadCatalogTypes(true).then(() => {
+      if (!this.state.catalogoActual) {
+        const first = this.state.catalogoTipos?.[0]?.catalogo;
+        if (first) {
+          this.state.catalogoActual = first;
+          if (this.dom.catalogSelect) {
+            this.dom.catalogSelect.value = first;
+          }
+        }
+      } else if (this.dom.catalogSelect) {
+        this.dom.catalogSelect.value = this.state.catalogoActual;
+      }
+
+      if (this.state.catalogoActual) {
+        this.loadCatalogo(true);
+      } else {
+        this.renderCatalogoTabla([]);
+        this.actualizarResumen();
+      }
+    });
+  },
+
+  async loadCatalogTypes(force = false) {
+    if (this.state.catalogoTiposLoading && !force) {
+      return this.state.catalogoTipos;
+    }
+
+    try {
+      this.state.catalogoTiposLoading = true;
+      const tipos = await apiService.fetchCatalogTypes();
+      const parsed = Array.isArray(tipos) ? tipos : [];
+
+      this.state.catalogoTipos = parsed
+        .map((item) => {
+          const key = item?.catalogo || item?.type || '';
+          if (!key) return null;
+          const label = (item?.label || item?.descripcion || '').toString().trim() || this.formatearEtiquetaTipo(key);
+          return {
+            catalogo: key,
+            label,
+            count: Number.isFinite(item?.count) ? Number(item.count) : 0,
+            isCustom: !Object.prototype.hasOwnProperty.call(CATALOG_LABELS, key)
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
+
+      this.state.catalogoEtiquetas = this.state.catalogoTipos.reduce((acc, item) => {
+        acc[item.catalogo] = item.label;
+        return acc;
+      }, {});
+
+      const finalValue = this.renderCatalogTypeOptions(this.state.catalogoActual);
+      if (finalValue !== undefined) {
+        this.state.catalogoActual = finalValue;
+      }
+
+      this.actualizarResumen();
+
+      return this.state.catalogoTipos;
+    } catch (error) {
+      console.error('[ERROR] Error cargando tipos de catálogo:', error);
+      mostrarToast('No se pudieron cargar los tipos de catálogo.', 'error');
+      return [];
+    } finally {
+      this.state.catalogoTiposLoading = false;
+    }
+  },
+
+  renderCatalogTypeOptions(selectedValue = null) {
+    if (!this.dom.catalogSelect) {
+      return this.state.catalogoActual || '';
+    }
+
+    const select = this.dom.catalogSelect;
+    const previousSelection = (selectedValue || '').trim();
+    const currentSelection = this.state.catalogoActual || '';
+
+    select.innerHTML = '';
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Selecciona tipo...';
+    select.appendChild(placeholder);
+
+    const tipos = Array.isArray(this.state.catalogoTipos) ? this.state.catalogoTipos : [];
+    tipos.forEach((tipo) => {
+      if (!tipo || !tipo.catalogo) return;
+      const option = document.createElement('option');
+      option.value = tipo.catalogo;
+      option.textContent = tipo.label || this.formatearEtiquetaTipo(tipo.catalogo);
+      if (tipo.isCustom) {
+        option.dataset.custom = 'true';
+      }
+      if (Number.isFinite(tipo.count)) {
+        option.dataset.count = String(tipo.count);
+      }
+      select.appendChild(option);
+    });
+
+    let finalValue = '';
+    if (previousSelection && this.hasCatalogType(previousSelection)) {
+      finalValue = previousSelection;
+    } else if (currentSelection && this.hasCatalogType(currentSelection)) {
+      finalValue = currentSelection;
+    } else {
+      const firstOption = select.querySelector('option[value]:not([value=""])');
+      finalValue = firstOption ? firstOption.value : '';
+    }
+
+    if (finalValue) {
+      select.value = finalValue;
+    } else {
+      select.value = '';
+    }
+
+    return finalValue;
+  },
+
+  hasCatalogType(tipo) {
+    if (!tipo) return false;
+    return this.state.catalogoTipos.some(item => item.catalogo === tipo);
+  },
+
+  normalizarIdentificadorTipo(valor) {
+    if (!valor && valor !== 0) return '';
+    return valor
+      .toString()
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_\-\s]/g, '')
+      .replace(/[-\s]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .substr(0, 40);
+  },
+
+  formatearEtiquetaTipo(valor) {
+    if (!valor && valor !== 0) return 'Catálogo';
+    return valor
+      .toString()
+      .replace(/[_\-]+/g, ' ')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .replace(/\b\w/g, (match) => match.toUpperCase());
+  },
+
+  crearTipoCatalogoInteractivo() {
+    const identificadorEntrada = window.prompt(
+      'Identificador técnico para el catálogo (usa letras minúsculas, números y guion bajo):'
+    );
+
+    if (identificadorEntrada === null) {
+      return;
+    }
+
+    const slug = this.normalizarIdentificadorTipo(identificadorEntrada);
+    if (!slug) {
+      mostrarToast('Debes especificar un identificador válido.', 'warning');
+      return;
+    }
+
+    if (this.hasCatalogType(slug)) {
+      mostrarToast('Ya existe un catálogo con ese identificador.', 'warning');
+      return;
+    }
+
+    const nombreSugerido = this.formatearEtiquetaTipo(slug);
+    const nombreEntrada = window.prompt('Nombre visible para el catálogo:', nombreSugerido);
+    const etiqueta = (nombreEntrada || '').trim() || nombreSugerido;
+
+    const nuevoTipo = {
+      catalogo: slug,
+      label: etiqueta,
+      count: 0,
+      isCustom: true
+    };
+
+    this.state.catalogoTipos = [...this.state.catalogoTipos, nuevoTipo].sort((a, b) => a.label.localeCompare(b.label, 'es', { sensitivity: 'base' }));
+    this.state.catalogoEtiquetas = {
+      ...this.state.catalogoEtiquetas,
+      [slug]: etiqueta
+    };
+
+    const seleccionado = this.renderCatalogTypeOptions(slug) || slug;
+    this.state.catalogoActual = seleccionado;
+
+    if (this.dom.catalogSelect) {
+      this.dom.catalogSelect.value = seleccionado;
+    }
+
+    this.state.catalogoItems = [];
+    this.state.catalogoIndex = {};
+    this.renderCatalogoTabla([]);
+    this.actualizarResumen();
+    this.limpiarFormulario();
+    this.mostrarMensajeFormulario(`Tipo "${etiqueta}" listo. Registra la primera entrada.`, 'info');
+    this.toggleBotonEliminar(false);
+    mostrarToast('Nuevo tipo creado. Guarda al menos una entrada para conservarlo.', 'info');
+  },
+
   obtenerEtiquetaCatalogo(tipo) {
-    return CATALOG_LABELS[tipo] || tipo || 'catálogo';
+    if (!tipo) return 'catálogo';
+    if (this.state.catalogoEtiquetas && this.state.catalogoEtiquetas[tipo]) {
+      return this.state.catalogoEtiquetas[tipo];
+    }
+    if (Object.prototype.hasOwnProperty.call(CATALOG_LABELS, tipo)) {
+      return CATALOG_LABELS[tipo];
+    }
+    return this.formatearEtiquetaTipo(tipo);
   },
 
   setCatalogoActual(tipo) {
-    this.state.catalogoActual = tipo || '';
+    const nuevoTipo = (tipo || '').trim();
+    if (this.state.catalogoActual === nuevoTipo) {
+      return;
+    }
+
+    this.state.catalogoActual = nuevoTipo;
+    if (!nuevoTipo) {
+      this.state.catalogoItems = [];
+      this.state.catalogoIndex = {};
+      this.renderCatalogoTabla([]);
+    }
     this.actualizarResumen();
     this.limpiarFormulario();
   },
@@ -62,9 +280,12 @@ export const catalogMethods = {
 
     if (!items || items.length === 0) {
       const fila = document.createElement('tr');
+      const mensaje = this.state.catalogoActual
+        ? `No hay registros para ${this.obtenerEtiquetaCatalogo(this.state.catalogoActual)}.`
+        : 'Selecciona un tipo de catálogo para comenzar.';
       fila.innerHTML = `
         <td colspan="7" class="px-4 py-6 text-center text-sm text-gray-500">
-          No hay registros para ${this.obtenerEtiquetaCatalogo(this.state.catalogoActual)}.
+          ${mensaje}
         </td>
       `;
       this.dom.tableBody.appendChild(fila);
@@ -152,7 +373,7 @@ export const catalogMethods = {
     this.dom.inputs.id.value = item.id || '';
     this.dom.inputs.idDisplay.value = item.id || '';
     this.dom.inputs.updatedAt.value = this.formatearFecha(item.updated_at, { includeTime: false }) || '';
-    this.dom.inputs.code.value = (item.code || '').toString();
+  this.dom.inputs.code.value = (item.code || '').toString();
     this.dom.inputs.label.value = item.label || item.nombre || '';
     this.dom.inputs.parent.value = item.parent_code || item.parentCode || '';
     this.dom.inputs.sortOrder.value = item.sort_order !== undefined && item.sort_order !== null ? item.sort_order : '';
@@ -206,7 +427,7 @@ export const catalogMethods = {
     const datos = {
       id: (this.dom.inputs.id.value || '').trim(),
       catalogo: this.state.catalogoActual,
-      code: (this.dom.inputs.code.value || '').trim().toUpperCase(),
+  code: (this.dom.inputs.code.value || '').trim(),
       label: (this.dom.inputs.label.value || '').trim(),
       parent_code: (this.dom.inputs.parent.value || '').trim(),
       sort_order: this.dom.inputs.sortOrder.value ? parseInt(this.dom.inputs.sortOrder.value, 10) : null,
@@ -229,10 +450,6 @@ export const catalogMethods = {
 
     if (!datos.label) {
       errores.push('El campo "Nombre" es obligatorio.');
-    }
-
-    if (datos.code && !/^[A-Z0-9_]{3,20}$/.test(datos.code)) {
-      errores.push('El código debe tener entre 3 y 20 caracteres en mayúsculas y puede incluir números o _.');
     }
 
     return errores;

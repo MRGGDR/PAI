@@ -1,7 +1,7 @@
 import { bindDomReferences, domRefs, avancesState, selectEnhancerContext, obtenerEmailUsuarioActualLocal } from './state.js';
 import { obtenerContextoPermisos, obtenerAreaAsignadaUsuario } from './permissions.js';
 import { AVANCE_PERMISSIONS } from './constants.js';
-import { syncFilterStateFromUI, handleFilterChange, setSelectedActivity } from './filters.js';
+import { syncFilterStateFromUI, handleFilterChange, setSelectedActivity, clearFilters } from './filters.js';
 import { loadActividades, loadAvances } from './data.js';
 import { attachModalEvents } from './modal.js';
 import { applyInitialSelectionAfterLoad } from './routing.js';
@@ -28,10 +28,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   avancesState.restricciones.restringirPorArea = restringirPorArea;
   avancesState.restricciones.areaAsignada = areaAsignada;
 
-  const filterElements = Object.values(filters).filter(Boolean);
+  const filterElements = Object.values(filters).filter((element) => element && element.tagName === 'SELECT');
   filterElements.forEach(select => {
     select.addEventListener('change', handleFilterChange);
   });
+  if (filters.clearButton) {
+    filters.clearButton.addEventListener('click', () => {
+      clearFilters();
+    });
+  }
   syncFilterStateFromUI();
 
   if (selectEnhancerContext.aplicarEstilosBaseSelects) {

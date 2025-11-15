@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PAI 2025 - Administración</title>
+  <title>Plan de Acción Institucional - Administración</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet" />
@@ -70,21 +70,17 @@
                       </label>
                       <select id="catalogo-tipo" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                         <option value="">Selecciona tipo...</option>
-                        <option value="area">Áreas</option>
-                        <option value="subproceso">Subprocesos</option>
-                        <option value="objetivo">Objetivos estratégicos</option>
-                        <option value="estrategia">Estrategias</option>
-                        <option value="linea">Líneas</option>
-                        <option value="indicador">Indicadores</option>
-                        <option value="plan">Planes</option>
-                        <option value="fuente">Fuentes de financiación</option>
-                        <option value="bimestre">Bimestres</option>
-                        <option value="mipg">Dimensiones MIPG</option>
                       </select>
-                      <button id="catalogo-refrescar" class="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-600">
-                        <span class="material-icons text-base">refresh</span>
-                        Cargar catálogo
-                      </button>
+                      <div class="grid gap-2 sm:grid-cols-2">
+                        <button id="catalogo-tipo-crear" type="button" class="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-indigo-200 bg-white px-4 py-2 text-sm font-semibold text-indigo-600 transition hover:border-indigo-400 hover:bg-indigo-50">
+                          <span class="material-icons text-base">add</span>
+                          Nuevo tipo
+                        </button>
+                        <button id="catalogo-refrescar" class="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-600">
+                          <span class="material-icons text-base">refresh</span>
+                          Cargar catálogo
+                        </button>
+                      </div>
                     </div>
                     <div class="space-y-4">
                       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -171,6 +167,202 @@
                           Guardar cambios
                         </button>
                         <button type="button" id="catalogo-eliminar" class="hidden items-center gap-2 rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-500 shadow-sm transition hover:border-red-300 hover:text-red-600">
+                          <span class="material-icons text-base">delete</span>
+                          Eliminar
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </section>
+              </div>
+            </details>
+
+            <details class="rounded-lg border border-gray-200 bg-white shadow-sm" id="panel-presupuestos">
+              <summary class="flex cursor-pointer select-none items-center justify-between gap-4 px-6 py-4 text-lg font-semibold text-[var(--text-primary)]">
+                <div class="flex items-center gap-3">
+                  <span class="material-icons text-indigo-500">account_balance</span>
+                  Presupuestos por área
+                </div>
+                <span class="material-icons chevron text-gray-500">chevron_right</span>
+              </summary>
+              <div class="border-t border-gray-100 p-6 space-y-6 presupuestos-panel-body">
+                <section class="space-y-4">
+                  <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 class="text-xl font-semibold text-[var(--text-primary)]">Presupuesto de áreas</h2>
+                      <p class="text-sm text-[var(--text-secondary)] max-w-3xl">
+                        Administra los topes de la hoja <strong>Presupuesto_Area</strong>. Puedes crear nuevas versiones por vigencia,
+                        marcar presupuestos vigentes y mantener un historial de modificaciones directamente desde este panel.
+                      </p>
+                    </div>
+                    <div class="flex flex-wrap items-center justify-end gap-2">
+                      <button id="presupuestos-recargar" class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-600">
+                        <span class="material-icons text-base">refresh</span>
+                        Actualizar listado
+                      </button>
+                      <button id="presupuestos-limpiar-filtros" class="inline-flex items-center gap-2 rounded-md border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 shadow-sm transition hover:border-indigo-300 hover:text-indigo-600">
+                        <span class="material-icons text-base">filter_alt_off</span>
+                        Limpiar filtros
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuestos-area-filtro">Área</label>
+                      <select id="presupuestos-area-filtro" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">Todas las áreas</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuestos-vigencia-filtro">Vigencia</label>
+                      <input id="presupuestos-vigencia-filtro" type="number" inputmode="numeric" placeholder="YYYY" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuestos-estado-filtro">Estado</label>
+                      <select id="presupuestos-estado-filtro" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">Todos los estados</option>
+                        <option value="Propuesto">Propuesto</option>
+                        <option value="Aprobado">Aprobado</option>
+                        <option value="Modificado">Modificado</option>
+                        <option value="Suspendido">Suspendido</option>
+                        <option value="Cerrado">Cerrado</option>
+                      </select>
+                    </div>
+                    <div class="flex items-center gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                      <input id="presupuestos-actual-filtro" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-[var(--primary-color)] focus:ring-indigo-500" />
+                      <label for="presupuestos-actual-filtro" class="text-sm text-[var(--text-secondary)]">Solo presupuestos vigentes (es_actual)</label>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-3">
+                    <label class="text-sm font-medium text-[var(--text-secondary)]" for="presupuestos-buscar">Buscar</label>
+                    <input id="presupuestos-buscar" type="search" placeholder="Por código, área o vigencia" class="flex-1 min-w-[220px] rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                    <span class="text-xs text-[var(--text-secondary)]" id="presupuestos-resumen">0 presupuestos</span>
+                  </div>
+
+                  <div class="overflow-x-auto rounded-lg border border-gray-200">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm" id="presupuestos-tabla">
+                      <thead class="bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                        <tr>
+                          <th class="px-3 py-2 text-left">Código</th>
+                          <th class="px-3 py-2 text-left">Área</th>
+                          <th class="px-3 py-2 text-left">Vigencia</th>
+                          <th class="px-3 py-2 text-left">Versión</th>
+                          <th class="px-3 py-2 text-left">Presupuesto</th>
+                          <th class="px-3 py-2 text-left">Estado</th>
+                          <th class="px-3 py-2 text-left">Vigencia del registro</th>
+                          <th class="px-3 py-2 text-left">Actual</th>
+                          <th class="px-3 py-2 text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-gray-200 bg-white" id="presupuestos-tabla-body">
+                        <tr>
+                          <td colspan="9" class="px-4 py-6 text-center text-sm text-gray-500">
+                            Presiona "Actualizar listado" para consultar los presupuestos disponibles.
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <section class="rounded-lg border border-gray-200 bg-gray-50 p-6">
+                  <form id="presupuestos-form" class="grid gap-4 md:grid-cols-2">
+                    <input type="hidden" id="presupuesto-id" />
+                    <div class="md:col-span-2 flex flex-wrap items-center justify-between gap-2">
+                      <h3 class="text-lg font-semibold text-[var(--text-primary)]" id="presupuesto-form-titulo">Registrar presupuesto de área</h3>
+                      <div class="flex gap-2">
+                        <button type="button" id="presupuesto-limpiar" class="inline-flex items-center gap-2 rounded-md border border-transparent px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-indigo-600">
+                          <span class="material-icons text-base">restart_alt</span>
+                          Limpiar
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="md:col-span-2 grid gap-3 md:grid-cols-3">
+                      <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-id-display">Código</label>
+                        <input id="presupuesto-id-display" type="text" readonly class="mt-1 w-full rounded-md border-gray-200 bg-gray-100 text-sm shadow-sm" placeholder="Se genera automáticamente" />
+                      </div>
+                      <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-registrado-por">Registrado por</label>
+                        <input id="presupuesto-registrado-por" type="text" readonly class="mt-1 w-full rounded-md border-gray-200 bg-gray-100 text-sm shadow-sm" placeholder="Se completará al guardar" />
+                      </div>
+                      <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-registrado-en">Registrado en</label>
+                        <input id="presupuesto-registrado-en" type="text" readonly class="mt-1 w-full rounded-md border-gray-200 bg-gray-100 text-sm shadow-sm" placeholder="Se completará al guardar" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-area-id">Área</label>
+                      <select id="presupuesto-area-id" required class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="">Selecciona un área...</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-vigencia">Vigencia</label>
+                      <input id="presupuesto-vigencia" type="number" inputmode="numeric" min="2000" max="2099" required class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="YYYY" />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-version">Versión</label>
+                      <input id="presupuesto-version" type="number" inputmode="numeric" min="1" step="1" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Auto" />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-asignado">Presupuesto asignado</label>
+                      <input id="presupuesto-asignado" type="number" inputmode="decimal" min="0" step="0.01" required class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="0" />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-moneda">Moneda</label>
+                      <input id="presupuesto-moneda" type="text" maxlength="5" class="mt-1 w-full uppercase rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" value="COP" />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-fuente">Fuente presupuestal</label>
+                      <input id="presupuesto-fuente" type="text" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Opcional" />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-estado">Estado</label>
+                      <select id="presupuesto-estado" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <option value="Propuesto">Propuesto</option>
+                        <option value="Aprobado">Aprobado</option>
+                        <option value="Modificado">Modificado</option>
+                        <option value="Suspendido">Suspendido</option>
+                        <option value="Cerrado">Cerrado</option>
+                      </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <input id="presupuesto-es-actual" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-[var(--primary-color)] focus:ring-indigo-500" />
+                      <label for="presupuesto-es-actual" class="text-sm text-[var(--text-secondary)]">Marcar como presupuesto vigente</label>
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-valido-desde">Válido desde</label>
+                      <input id="presupuesto-valido-desde" type="date" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                    </div>
+                    <div>
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-valido-hasta">Válido hasta</label>
+                      <input id="presupuesto-valido-hasta" type="date" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                    </div>
+                    <div class="md:col-span-2">
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-doc">URL del soporte (opcional)</label>
+                      <input id="presupuesto-doc" type="url" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="https://" />
+                    </div>
+                    <div class="md:col-span-2">
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-motivo">Motivo del cambio</label>
+                      <textarea id="presupuesto-motivo" rows="2" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Describe la modificación realizada"></textarea>
+                    </div>
+                    <div class="md:col-span-2">
+                      <label class="block text-xs font-semibold uppercase tracking-wide text-[var(--text-secondary)]" for="presupuesto-observaciones">Observaciones</label>
+                      <textarea id="presupuesto-observaciones" rows="2" class="mt-1 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500" placeholder="Notas internas opcionales"></textarea>
+                    </div>
+                    <div class="md:col-span-2 flex flex-wrap items-center justify-between gap-3">
+                      <div class="text-xs text-[var(--text-secondary)]" id="presupuesto-form-status"></div>
+                      <div class="flex gap-3">
+                        <button type="submit" class="inline-flex items-center gap-2 rounded-md bg-[var(--primary-color)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-600">
+                          <span class="material-icons text-base">save</span>
+                          Guardar presupuesto
+                        </button>
+                        <button type="button" id="presupuesto-eliminar" class="hidden items-center gap-2 rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-500 shadow-sm transition hover:border-red-300 hover:text-red-600">
                           <span class="material-icons text-base">delete</span>
                           Eliminar
                         </button>

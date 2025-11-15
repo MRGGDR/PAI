@@ -12,7 +12,8 @@ export const domRefs = {
   filters: {
     actividad: null,
     year: null,
-    bimestre: null
+    bimestre: null,
+    clearButton: null
   },
   activitySummary: {
     container: null,
@@ -113,6 +114,7 @@ export function bindDomReferences() {
   domRefs.filters.actividad = document.getElementById('filter-actividad');
   domRefs.filters.year = document.getElementById('filter-year');
   domRefs.filters.bimestre = document.getElementById('filter-bimestre');
+  domRefs.filters.clearButton = document.getElementById('filter-clear');
 
   domRefs.activitySummary.container = document.getElementById('actividad-resumen-card');
   domRefs.activitySummary.name = document.getElementById('actividad-resumen-nombre');

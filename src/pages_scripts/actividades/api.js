@@ -67,7 +67,7 @@ class ApiService {
         console.error('[ERROR] Error resolviendo URL del backend:', error);
 
         // Si falla, usar el valor predeterminado
-  this.backendUrl = 'https://script.google.com/macros/s/AKfycbzYr2sSS9w7Zgil_vHCrZESGidiVMzaMJKtKUi9A4QPaoUXRR6VmQeeeomdaMr6RJ_duQ/exec';
+  this.backendUrl = 'https://script.google.com/macros/s/AKfycbzdid5JqHEArgvL5lQ8L9nv_RCO82rm0EVc5CJiOJE031EoI_0EebxoFtOfU0RiOmo31A/exec';
 
         console.warn('[WARN] Usando URL de backend por defecto:', this.backendUrl);
       }
@@ -151,6 +151,29 @@ class ApiService {
       return result;
     } catch (error) {
       console.error(`[ERROR] Error en callBackend(${endpoint}):`, error);
+
+      // Intento de fallback automático para entornos de desarrollo locales donde
+      // la llamada directa al Apps Script puede fallar por CORS. Si detectamos
+      // que la URL apunta a script.google.com, hacemos un segundo intento hacia
+      // un proxy local en la misma raíz: /api (por ejemplo, con `vercel dev`).
+      try {
+        if (typeof window !== 'undefined' && url && url.includes('script.google.com')) {
+          const fallbackUrl = window.location.origin + '/api';
+          console.warn('[WARN] Intentando fallback a proxy local en:', fallbackUrl);
+          const fallbackOptions = { ...fetchOptions, headers: { ...fetchOptions.headers, 'Content-Type': 'application/json' } };
+          const fallbackResp = await fetch(fallbackUrl, fallbackOptions);
+          if (fallbackResp.ok) {
+            const fallbackResult = await fallbackResp.json();
+            console.log('[INFO] Fallback a /api exitoso, resultado:', fallbackResult);
+            return fallbackResult;
+          } else {
+            console.warn('[WARN] Fallback a /api devolvió estado:', fallbackResp.status);
+          }
+        }
+      } catch (fbErr) {
+        console.warn('[WARN] Fallback a /api falló:', fbErr);
+      }
+
       throw error;
     } finally {
       // Ocultar loader si está disponible

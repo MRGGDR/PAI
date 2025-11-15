@@ -37,7 +37,7 @@ API pública (objeto `utilsMethods`)
 - `obtenerActividadId(actividad)`, `obtenerAvanceId(avance)`, `obtenerActividadCodigo(registro)`
 - `formatearFechaISO(valor)`, `formatearFecha(valor, opciones)`
 - `renderEstadoRevisionBadge(estado)` — devuelve HTML de badge según estado de revisión.
-- `desplazarHacia(elemento)` — hace scroll y abre <details> padres.
+- `desplazarHacia(elemento)` — hace scroll y abre `<details>` padres.
 
 Notas y consideraciones
 - Las heurísticas para extraer IDs/códigos cubren múltiples formatos legacy — ideal para normalizar datos entrantes.

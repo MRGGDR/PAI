@@ -130,8 +130,11 @@
 .sidebar.collapsed .bottom-area .logout-danger{ max-width:100%; padding-left:6px; padding-right:6px; box-sizing:border-box }
 .sidebar .bottom-area a, .sidebar .bottom-area .pin-btn{ flex:0 0 auto }
 .sidebar.collapsed .bottom-area{ align-items:center; }
-.sidebar.collapsed .bottom-area a{ justify-content:center; width:100%; display:inline-flex; align-items:center; }
+.sidebar.collapsed .bottom-area a{ justify-content:center; width:100%; display:inline-flex; align-items:center; padding-left:0.5rem; padding-right:0.5rem; }
 .sidebar.collapsed .bottom-area a .material-icons{ font-size:24px; line-height:24px }
+.sidebar.collapsed .bottom-area > div:first-child{ width:100%; justify-content:center; }
+.sidebar.collapsed .bottom-area .pin-btn{ width:0; padding:0; margin:0; }
+.sidebar.collapsed .bottom-area > div:last-child{ display:none; }
 
 /* Sidebar inner wrapper (structural only) */
 .sidebar .sidebar-inner{ display:flex; flex-direction:column; min-height:100vh; height:100%; }

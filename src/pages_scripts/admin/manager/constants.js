@@ -3,7 +3,8 @@ export const CATALOG_LABELS = {
   subproceso: 'Subprocesos',
   objetivo: 'Objetivos estratégicos',
   estrategia: 'Estrategias',
-  linea: 'Líneas',
+  linea_trabajo: 'Líneas de trabajo',
+  linea_accion: 'Líneas de acción',
   indicador: 'Indicadores',
   plan: 'Planes',
   fuente: 'Fuentes de financiación',
@@ -12,3 +13,11 @@ export const CATALOG_LABELS = {
 };
 
 export const ADMIN_LOADER_MESSAGE = 'Cargando informacion de administracion...';
+
+export const AREA_BUDGET_STATES = [
+  'Propuesto',
+  'Aprobado',
+  'Modificado',
+  'Suspendido',
+  'Cerrado'
+];

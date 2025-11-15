@@ -35,6 +35,7 @@ const API_ROUTES = {
   // Rutas de catálogos (delegadas a CatalogManager)
   'catalog/getAll': 'CATALOG',
   'catalog/getByType': 'CATALOG',
+  'catalog/getTypes': 'CATALOG',
   'catalog/getById': 'CATALOG', 
   'catalog/getByCode': 'CATALOG',
   'catalog/getHierarchy': 'CATALOG',
@@ -64,6 +65,12 @@ const API_ROUTES = {
   'actividades/actualizar': 'ACTIVITY_LEGACY',
   'actividades/eliminar': 'ACTIVITY_LEGACY',
   'actividades/buscar': 'ACTIVITY_LEGACY',
+
+  // Presupuestos de área
+  'presupuestos/listar': 'BUDGET',
+  'presupuestos/guardar': 'BUDGET',
+  'presupuestos/eliminar': 'BUDGET',
+  'presupuestos/resumenArea': 'BUDGET',
   
   // Rutas de utilidad
   'ping': 'LOCAL',
@@ -295,6 +302,9 @@ function routeToHandler(handlerType, path, payload) {
       
       case 'ACTIVITY_LEGACY':
         return handleLegacyActivityRoutes(requestBody);
+
+      case 'BUDGET':
+        return handleBudgetRoutes(requestBody);
       
       default:
         return formatResponse(false, null, '', `Handler '${handlerType}' no implementado`);
@@ -601,6 +611,7 @@ function getCatalogosAgrupados() {
       subprocesos: [],
       objetivos: [],
       estrategias: [],
+      lineas_trabajo: [],
       lineas: [],
       indicadores: [],
       planes: [],
@@ -626,6 +637,10 @@ function getCatalogosAgrupados() {
         case 'estrategia':
           grouped.estrategias.push(mappedItem);
           break;
+        case 'linea_trabajo':
+          grouped.lineas_trabajo.push(mappedItem);
+          break;
+        case 'linea_accion':
         case 'linea':
           grouped.lineas.push(mappedItem);
           break;
@@ -646,6 +661,10 @@ function getCatalogosAgrupados() {
           break;
       }
     });
+
+    grouped.lineasTrabajo = grouped.lineas_trabajo;
+    grouped.lineasAccion = grouped.lineas;
+    grouped.lineas_accion = grouped.lineas;
     
   console.log('[DEBUG] Catálogos agrupados preparados desde datos reales');
   console.log('[DEBUG] Resumen de elementos por catálogo:');
@@ -707,9 +726,20 @@ function mapCatalogItemToLegacyFormat(item) {
       }
       break;
       
+    case 'linea_trabajo':
+      mapped.linea_trabajo_id = item.code;
+      mapped.linea_trabajo_codigo = item.code;
+      if (item.parent_code) {
+        mapped.estrategia_id = item.parent_code;
+      }
+      break;
+
+    case 'linea_accion':
     case 'linea':
+      mapped.linea_accion_id = item.code;
       mapped.linea_codigo = item.code;
-      // Para líneas, parent_code debería apuntar a la estrategia
+      mapped.linea_accion_codigo = item.code;
+      // Para líneas de acción, parent_code apunta a la estrategia
       if (item.parent_code) {
         mapped.estrategia_id = item.parent_code;
       }

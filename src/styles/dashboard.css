@@ -1,0 +1,285 @@
+/* Dashboard Custom Styles */
+
+/* Smooth animations for cards */
+.kpi-card {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+}
+
+/* Budget progress bar animation */
+#kpi-budget-bar {
+  transition: width 1s ease-out;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+/* Enhanced table row styling */
+#dashboard-activities-body tr {
+  transition: all 0.2s ease;
+  border-left: 3px solid transparent;
+}
+
+#dashboard-activities-body tr:hover {
+  background-color: #f9fafb;
+  transform: scale(1.002);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-left-color: #6366f1;
+}
+
+/* Status badge styles */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.875rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.status-badge[data-status="aprobado"], .status-aprobado {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  color: #065f46;
+  border-color: #a7f3d0;
+}
+
+.status-badge[data-status="sin-revision"], .status-sin-revision {
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+  color: #475569;
+  border-color: #cbd5f5;
+}
+
+.status-badge[data-status="en-revision"], .status-en-revision {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.status-badge[data-status="correccion"], .status-correccion {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  color: #c2410c;
+  border-color: #fdba74;
+}
+
+.status-badge[data-status="cancelado"], .status-cancelado {
+  background: linear-gradient(135deg, #fff1f2 0%, #fee2e2 100%);
+  color: #9f1239;
+  border-color: #fecdd3;
+}
+
+.status-badge[data-status="planeada"], .status-planeada {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.status-badge[data-status="en-progreso"], .status-en-progreso {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
+
+.status-badge[data-status="completada"], .status-completada {
+  background: linear-gradient(135deg, #ecfdf5 0%, #bbf7d0 100%);
+  color: #047857;
+  border-color: #6ee7b7;
+}
+
+.status-badge[data-status="suspendida"], .status-suspendida {
+  background: linear-gradient(135deg, #fffbeb 0%, #fde68a 100%);
+  color: #92400e;
+  border-color: #fbbf24;
+}
+
+.status-badge[data-status="default"], .status-default {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.status-badge:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.status-completada {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
+  border: 1px solid #6ee7b7;
+}
+
+.status-en-ejecucion {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.status-planeada {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+
+.status-cancelada {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.status-default {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+/* Chart styling improvements */
+.chart-bar {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+}
+
+.chart-bar:hover {
+  opacity: 0.85;
+  transform: translateY(-4px);
+  filter: brightness(1.1);
+}
+
+/* Compliance bar styling */
+.compliance-bar {
+  transition: width 0.6s ease-out;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  border-radius: 0.375rem;
+  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+}
+
+/* Loading skeleton animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.loading-skeleton {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background-color: #e5e7eb;
+  border-radius: 0.25rem;
+}
+
+/* Fade in animation for content */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Responsive improvements */
+@media (max-width: 640px) {
+  .kpi-card {
+    padding: 1rem;
+  }
+  
+  #kpi-budget-comparison {
+    font-size: 1.5rem;
+  }
+}
+
+/* Gradient backgrounds for sections */
+.section-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Custom scrollbar for charts */
+#chart-areas-columns::-webkit-scrollbar {
+  height: 8px;
+}
+
+#chart-areas-columns::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+#chart-areas-columns::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #cbd5e1, #94a3b8);
+  border-radius: 4px;
+}
+
+#chart-areas-columns::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #94a3b8, #64748b);
+}
+
+/* Enhanced hover effect for filter buttons */
+#filter-clear:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+}
+
+/* Table header enhancement */
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  backdrop-filter: blur(10px);
+}
+
+/* Table container scroll */
+.table-scroll-container {
+  max-height: 600px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.table-scroll-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.table-scroll-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #cbd5e1, #94a3b8);
+  border-radius: 4px;
+}
+
+.table-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #94a3b8, #64748b);
+}
+
+/* Empty state styling */
+#chart-areas-empty,
+#chart-compliance-empty,
+#dashboard-activities-empty {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  background: linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%);
+  border-radius: 0.5rem;
+  border: 2px dashed #e5e7eb;
+}
+
+/* Card hover glow effect */
+article:hover {
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.15);
+}
+

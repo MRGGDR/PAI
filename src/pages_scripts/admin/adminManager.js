@@ -14,6 +14,7 @@ import { catalogMethods } from './manager/catalogs.js';
 import { userMethods } from './manager/users.js';
 import { activitiesMethods } from './manager/activities.js';
 import { avancesMethods } from './manager/avances.js';
+import { budgetMethods } from './manager/budgets.js';
 
 class AdminManager {
   constructor() {
@@ -30,6 +31,9 @@ class AdminManager {
       catalogoActual: '',
       catalogoItems: [],
       catalogoIndex: {},
+      catalogoTipos: [],
+      catalogoEtiquetas: {},
+      catalogoTiposLoading: false,
       isLoading: false,
       actividades: [],
       actividadesFiltradas: [],
@@ -42,12 +46,27 @@ class AdminManager {
       avances: [],
       avancesFiltrados: [],
       avancesIndex: {},
-      avancesBusqueda: ''
+      avancesBusqueda: '',
+      presupuestosArea: [],
+      presupuestosAreaFiltrados: [],
+      presupuestosAreaIndex: {},
+      presupuestosFiltros: {
+        area: '',
+        vigencia: '',
+        estado: '',
+        esActual: false
+      },
+      presupuestosBusqueda: '',
+      presupuestoAreasCatalog: [],
+      presupuestoAreasMap: {},
+      presupuestosMeta: {},
+      presupuestoEditando: null
     };
 
     this.dom = {
       root: document.getElementById('app-admin'),
       catalogSelect: document.getElementById('catalogo-tipo'),
+      createTypeButton: document.getElementById('catalogo-tipo-crear'),
       refreshButton: document.getElementById('catalogo-refrescar'),
       exportButton: document.getElementById('catalogo-exportar'),
       counter: document.getElementById('catalogo-contador'),
@@ -83,6 +102,42 @@ class AdminManager {
           password: document.getElementById('usuario-password'),
           role: document.getElementById('usuario-rol'),
           area: document.getElementById('usuario-area')
+        }
+      },
+      presupuestos: {
+        panel: document.getElementById('panel-presupuestos'),
+        refreshButton: document.getElementById('presupuestos-recargar'),
+        clearFiltersButton: document.getElementById('presupuestos-limpiar-filtros'),
+        areaFilter: document.getElementById('presupuestos-area-filtro'),
+        vigenciaFilter: document.getElementById('presupuestos-vigencia-filtro'),
+        estadoFilter: document.getElementById('presupuestos-estado-filtro'),
+        actualFilter: document.getElementById('presupuestos-actual-filtro'),
+        searchInput: document.getElementById('presupuestos-buscar'),
+        summary: document.getElementById('presupuestos-resumen'),
+        tableBody: document.getElementById('presupuestos-tabla-body'),
+        form: document.getElementById('presupuestos-form'),
+        formTitle: document.getElementById('presupuesto-form-titulo'),
+        formStatus: document.getElementById('presupuesto-form-status'),
+        clearButton: document.getElementById('presupuesto-limpiar'),
+        deleteButton: document.getElementById('presupuesto-eliminar'),
+        inputs: {
+          id: document.getElementById('presupuesto-id'),
+          idDisplay: document.getElementById('presupuesto-id-display'),
+          areaId: document.getElementById('presupuesto-area-id'),
+          vigencia: document.getElementById('presupuesto-vigencia'),
+          version: document.getElementById('presupuesto-version'),
+          asignado: document.getElementById('presupuesto-asignado'),
+          moneda: document.getElementById('presupuesto-moneda'),
+          fuente: document.getElementById('presupuesto-fuente'),
+          estado: document.getElementById('presupuesto-estado'),
+          esActual: document.getElementById('presupuesto-es-actual'),
+          validoDesde: document.getElementById('presupuesto-valido-desde'),
+          validoHasta: document.getElementById('presupuesto-valido-hasta'),
+          doc: document.getElementById('presupuesto-doc'),
+          motivo: document.getElementById('presupuesto-motivo'),
+          observaciones: document.getElementById('presupuesto-observaciones'),
+          registradoPor: document.getElementById('presupuesto-registrado-por'),
+          registradoEn: document.getElementById('presupuesto-registrado-en')
         }
       },
       actividades: {
@@ -124,9 +179,31 @@ class AdminManager {
       }
     };
 
+    // Añadir un toggle de debug visible sólo para administradores
+    try {
+      const rolNorm = normalizarRol(obtenerRolUsuarioActual());
+      if (rolNorm === 'admin' && this.dom.root) {
+        const debugContainer = document.createElement('div');
+        debugContainer.style.cssText = 'position:absolute; top:8px; right:8px; z-index:1000; font-size:12px;';
+        debugContainer.innerHTML = `<label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="admin-debug-toggle">Mostrar debug</label>`;
+        this.dom.root.appendChild(debugContainer);
+        const cb = debugContainer.querySelector('#admin-debug-toggle');
+        try { cb.checked = !!(window.DebugManager && window.DebugManager.isEnabled && window.DebugManager.isEnabled()); } catch(e) {}
+        cb.addEventListener('change', (evt) => {
+          try {
+            if (window.DebugManager && typeof window.DebugManager.setEnabledForAdmin === 'function') {
+              window.DebugManager.setEnabledForAdmin(evt.target.checked);
+            }
+          } catch(e) {}
+        });
+      }
+    } catch(e) {}
+
     this.areaOptionsCache = new Set();
     this.usuariosAreaLoaded = false;
     this.usuarioEditando = null;
+    this.presupuestosCatalogoCargado = false;
+    this.presupuestosPanelInicializado = false;
 
     if (!this.puedeGestionarCatalogos()) {
       this.mostrarAccesoRestringido();
@@ -139,7 +216,7 @@ class AdminManager {
   init() {
     this.applyPermissionGuards();
     this.bindEvents();
-    this.establecerCatalogoInicial();
+    this.initializeCatalogModule();
 
     if (this.puedeGestionarUsuarios()) {
       this.loadUsuarios();
@@ -148,6 +225,7 @@ class AdminManager {
 
     this.loadActividades();
     this.loadAvances();
+    this.initializeBudgetModule();
   }
 
   bindEvents() {
@@ -157,6 +235,10 @@ class AdminManager {
         this.setCatalogoActual(tipo);
         this.loadCatalogo(true);
       });
+    }
+
+    if (this.dom.createTypeButton) {
+      this.dom.createTypeButton.addEventListener('click', () => this.crearTipoCatalogoInteractivo());
     }
 
     if (this.dom.refreshButton) {
@@ -201,6 +283,30 @@ class AdminManager {
       }
     }
 
+    const presupuestosDom = this.dom.presupuestos;
+    if (this.puedeGestionarPresupuestos() && presupuestosDom) {
+      presupuestosDom.refreshButton?.addEventListener('click', () => this.loadPresupuestosArea(true));
+      presupuestosDom.clearFiltersButton?.addEventListener('click', () => this.resetPresupuestoFiltros());
+      presupuestosDom.areaFilter?.addEventListener('change', () => this.handlePresupuestoFilterChange());
+      presupuestosDom.vigenciaFilter?.addEventListener('input', () => this.handlePresupuestoFilterChange());
+      presupuestosDom.estadoFilter?.addEventListener('change', () => this.handlePresupuestoFilterChange());
+      presupuestosDom.actualFilter?.addEventListener('change', () => this.handlePresupuestoFilterChange());
+      presupuestosDom.searchInput?.addEventListener('input', (event) => {
+        this.applyPresupuestoBusqueda(event.target.value || '');
+      });
+      presupuestosDom.tableBody?.addEventListener('click', (event) => this.handlePresupuestoTablaClick(event));
+      presupuestosDom.form?.addEventListener('submit', (event) => this.handlePresupuestoSubmit(event));
+      presupuestosDom.clearButton?.addEventListener('click', () => this.resetPresupuestoFormulario());
+      presupuestosDom.deleteButton?.addEventListener('click', () => this.confirmarEliminarPresupuesto());
+      if (presupuestosDom.panel) {
+        presupuestosDom.panel.addEventListener('toggle', () => {
+          if (presupuestosDom.panel.open) {
+            this.initializeBudgetModule();
+          }
+        });
+      }
+    }
+
     const actividadesDom = this.dom.actividades;
     if (actividadesDom?.refreshButton) {
       actividadesDom.refreshButton.addEventListener('click', () => this.loadActividades(true));
@@ -212,6 +318,7 @@ class AdminManager {
     }
     if (actividadesDom?.tableBody) {
       actividadesDom.tableBody.addEventListener('click', (event) => this.handleActividadesClick(event));
+      actividadesDom.tableBody.addEventListener('change', (event) => this.handleActividadesChange(event));
     }
     if (actividadesDom?.clearButton) {
       actividadesDom.clearButton.addEventListener('click', () => this.limpiarActividadFormulario());
@@ -250,6 +357,7 @@ Object.assign(
   utilsMethods,
   permissionMethods,
   catalogMethods,
+  budgetMethods,
   userMethods,
   activitiesMethods,
   avancesMethods

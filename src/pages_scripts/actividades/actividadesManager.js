@@ -11,7 +11,7 @@ import {
   normalizarRol,
   obtenerPermisosRol
 } from './utils.js';
-import { BIMESTRES_CONFIG } from './manager/constants.js';
+import { BIMESTRES_CONFIG, RIESGO_SEMAFORO_CONFIG } from './manager/constants.js';
 import { utilsMethods } from './manager/utils.js';
 import { permissionMethods } from './manager/permissions.js';
 import { catalogMethods } from './manager/catalogs.js';
@@ -19,6 +19,54 @@ import { uiEnhancerMethods } from './manager/uiEnhancers.js';
 import { activitiesDataMethods } from './manager/activitiesData.js';
 import { descriptionMethods } from './manager/description.js';
 import { bimestresMethods } from './manager/bimestres.js';
+import { budgetMethods } from './manager/presupuestos.js';
+
+function normalizeNumericSegment(input) {
+  if (input === null || input === undefined) return null;
+  let sanitized = input
+    .toString()
+    .trim()
+    .replace(/[\s\u00A0$]/g, '')
+    .replace(/[^0-9,.-]/g, '');
+
+  if (!sanitized) return null;
+
+  const lastComma = sanitized.lastIndexOf(',');
+  const lastDot = sanitized.lastIndexOf('.');
+
+  if (lastComma > -1 && lastDot > -1) {
+    if (lastComma > lastDot) {
+      sanitized = sanitized.replace(/\./g, '').replace(/,/g, '.');
+    } else {
+      sanitized = sanitized.replace(/,/g, '');
+    }
+  } else if (lastComma > -1) {
+    sanitized = sanitized.replace(/\./g, '').replace(/,/g, '.');
+  } else {
+    const dotCount = (sanitized.match(/\./g) || []).length;
+    const thousandsPattern = /^-?\d{1,3}(\.\d{3})+$/;
+    if (dotCount > 1 || thousandsPattern.test(sanitized)) {
+      sanitized = sanitized.replace(/\./g, '');
+    }
+    sanitized = sanitized.replace(/,/g, '');
+  }
+
+  const num = Number(sanitized);
+  return Number.isFinite(num) ? num : null;
+}
+
+function isLikelyYearSegment(rawSegment, parsedValue, currentYear, index, totalSegments) {
+  if (!Number.isInteger(parsedValue)) return false;
+  if (parsedValue < 1900 || parsedValue > currentYear + 10) return false;
+  const rawText = rawSegment ? rawSegment.toString().trim() : '';
+  if (!rawText) return false;
+  const core = rawText.replace(/^[^0-9-]+|[^0-9-]+$/g, '');
+  if (!/^\d{4}$/.test(core)) return false;
+  if (totalSegments > 1 && index === totalSegments - 1) {
+    return true;
+  }
+  return /\b(?:ano|año|vigencia|periodo|período)\b/i.test(rawText);
+}
 
 class ActividadesManager {
   constructor() {
@@ -32,7 +80,12 @@ class ActividadesManager {
         plan: ''
       },
       actividades: [],
-      actividadActual: null
+      actividadActual: null,
+      presupuestoArea: {
+        resumen: null,
+        actividades: [],
+        meta: null
+      }
     };
 
     this.state.permisos = this.obtenerPermisosDesdeUsuario(this.state.usuario);
@@ -66,6 +119,8 @@ class ActividadesManager {
       metaDiffElement: null,
       metaFeedbackElement: null
     };
+
+    this.areaBudgetUI = null;
 
     this.cargandoDatos = false;
 
@@ -223,31 +278,40 @@ class ActividadesManager {
       return Number.isFinite(valor) ? Math.round(valor * 100) / 100 : 0;
     }
 
-    let texto = valor.toString().trim();
-    if (!texto) return 0;
+    const texto = valor.toString();
+    if (!texto.trim()) return 0;
 
-    texto = texto.replace(/[^0-9,.-]/g, '');
-    if (!texto) return 0;
+    const segmentosCrudos = texto.match(/-?\d[\d.,]*/g) || [];
+    const segmentos = segmentosCrudos
+      .map((segmento, index) => {
+        const parsed = normalizeNumericSegment(segmento);
+        return parsed === null ? null : { raw: segmento, parsed, index };
+      })
+      .filter(Boolean);
 
-    const tieneComa = texto.includes(',');
-    const tienePunto = texto.includes('.');
-
-    if (tieneComa && tienePunto) {
-      if (texto.lastIndexOf('.') > texto.lastIndexOf(',')) {
-        texto = texto.replace(/,/g, '');
-      } else {
-        texto = texto.replace(/\./g, '').replace(/,/g, '.');
+    let seleccionado = null;
+    if (segmentos.length) {
+      const currentYear = new Date().getFullYear();
+      const filtrados = segmentos.filter((segmento, idx) => !isLikelyYearSegment(
+        segmento.raw,
+        segmento.parsed,
+        currentYear,
+        idx,
+        segmentos.length
+      ));
+      seleccionado = (filtrados.length ? filtrados[0] : segmentos[0]) || null;
+    } else {
+      const parsedTextoCompleto = normalizeNumericSegment(texto);
+      if (parsedTextoCompleto !== null) {
+        seleccionado = { parsed: parsedTextoCompleto };
       }
-    } else if (tieneComa) {
-      texto = texto.replace(/\./g, '').replace(/,/g, '.');
     }
 
-    const numero = Number(texto);
-    if (Number.isNaN(numero) || !Number.isFinite(numero)) {
+    if (!seleccionado) {
       return 0;
     }
 
-    return Math.round(numero * 100) / 100;
+    return Math.round(seleccionado.parsed * 100) / 100;
   }
 
   setMetaTexto(texto = '') {
@@ -500,6 +564,169 @@ class ActividadesManager {
     }
   }
 
+  normalizarRiesgoPorcentaje(valor) {
+    if (valor === null || valor === undefined) {
+      return null;
+    }
+
+    const texto = valor.toString().trim();
+    if (!texto) {
+      return null;
+    }
+
+    const sanitized = texto
+      .replace(/%/g, '')
+      .replace(/\s+/g, '')
+      .replace(/,/g, '.')
+      .replace(/[^0-9.+-]/g, '');
+
+    if (!sanitized) {
+      return null;
+    }
+
+    const numero = Number(sanitized);
+    if (!Number.isFinite(numero)) {
+      return null;
+    }
+
+    const bounded = Math.min(100, Math.max(0, numero));
+    return Math.round(bounded * 100) / 100;
+  }
+
+  obtenerConfigRiesgo(valor) {
+    const percent = this.normalizarRiesgoPorcentaje(valor);
+    if (percent === null) {
+      return {
+        id: '',
+        label: 'Sin clasificar',
+        percent: null,
+        min: 0,
+        max: 100,
+        rangeLabel: '0% - 100%',
+        chipClass: 'riesgo-chip--neutral',
+        helperClass: 'riesgo-porcentaje-helper--neutral'
+      };
+    }
+
+    const config = RIESGO_SEMAFORO_CONFIG.find(item => percent >= item.min && percent <= item.max)
+      || RIESGO_SEMAFORO_CONFIG[RIESGO_SEMAFORO_CONFIG.length - 1];
+
+    return {
+      ...config,
+      percent,
+      rangeLabel: `${config.min}% - ${config.max}%`,
+      chipClass: `riesgo-chip--${config.id}`,
+      helperClass: `riesgo-porcentaje-helper--${config.id}`
+    };
+  }
+
+  actualizarRiesgoSemaforoUI(valor) {
+    const porcentajeInput = document.getElementById('riesgo_porcentaje');
+    const chip = document.getElementById('riesgo-porcentaje-chip');
+    const chipLabel = chip ? chip.querySelector('.riesgo-chip__label') : null;
+    const helper = document.getElementById('riesgo-porcentaje-helper');
+    const opcionesContainer = document.getElementById('riesgo-semaforo-opciones');
+    const clearButton = document.getElementById('riesgo-rubrica-clear');
+
+    const info = this.obtenerConfigRiesgo(valor);
+    const percent = info.percent;
+
+    if (porcentajeInput) {
+      if (percent === null) {
+        porcentajeInput.value = '';
+      } else {
+        porcentajeInput.value = String(percent);
+      }
+    }
+
+    if (chip) {
+      const chipClasses = [
+        'riesgo-chip--neutral',
+        'riesgo-chip--bajo',
+        'riesgo-chip--moderado',
+        'riesgo-chip--alto',
+        'riesgo-chip--critico'
+      ];
+      chipClasses.forEach(clase => chip.classList.remove(clase));
+      chip.classList.add(info.chipClass || 'riesgo-chip--neutral');
+      if (chipLabel) {
+        chipLabel.textContent = info.label;
+      }
+    }
+
+    if (helper) {
+      const helperClasses = [
+        'riesgo-porcentaje-helper--neutral',
+        'riesgo-porcentaje-helper--bajo',
+        'riesgo-porcentaje-helper--moderado',
+        'riesgo-porcentaje-helper--alto',
+        'riesgo-porcentaje-helper--critico'
+      ];
+      helperClasses.forEach(clase => helper.classList.remove(clase));
+      helper.classList.add(info.helperClass || 'riesgo-porcentaje-helper--neutral');
+      helper.textContent = percent === null
+        ? 'Ingresa un valor entre 0 y 100.'
+        : `${info.label}: ${percent}% (${info.rangeLabel})`;
+    }
+
+    if (opcionesContainer) {
+      const opciones = opcionesContainer.querySelectorAll('[data-riesgo-option]');
+      opciones.forEach(opcion => {
+        const nivel = opcion.getAttribute('data-nivel');
+        const esSeleccionada = info.percent !== null && nivel === info.id;
+        opcion.setAttribute('aria-checked', esSeleccionada ? 'true' : 'false');
+      });
+    }
+
+    if (clearButton) {
+      const disabled = info.percent === null;
+      clearButton.disabled = disabled;
+      clearButton.style.opacity = disabled ? '0.5' : '';
+      clearButton.style.pointerEvents = disabled ? 'none' : '';
+    }
+  }
+
+  inicializarRiesgoSemaforo() {
+    const opcionesContainer = document.getElementById('riesgo-semaforo-opciones');
+    const porcentajeInput = document.getElementById('riesgo_porcentaje');
+    const clearButton = document.getElementById('riesgo-rubrica-clear');
+
+    if (opcionesContainer) {
+      const opciones = opcionesContainer.querySelectorAll('[data-riesgo-option]');
+      opciones.forEach(opcion => {
+        opcion.setAttribute('tabindex', '0');
+        opcion.addEventListener('click', () => {
+          const percent = this.normalizarRiesgoPorcentaje(opcion.getAttribute('data-percent'));
+          this.actualizarRiesgoSemaforoUI(percent);
+        });
+        opcion.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            opcion.click();
+          }
+        });
+      });
+    }
+
+    if (porcentajeInput) {
+      porcentajeInput.addEventListener('input', () => {
+        this.actualizarRiesgoSemaforoUI(porcentajeInput.value);
+      });
+      porcentajeInput.addEventListener('blur', () => {
+        const normalizado = this.normalizarRiesgoPorcentaje(porcentajeInput.value);
+        this.actualizarRiesgoSemaforoUI(normalizado);
+      });
+    }
+
+    if (clearButton) {
+      clearButton.addEventListener('click', () => {
+        this.actualizarRiesgoSemaforoUI(null);
+      });
+    }
+
+    this.actualizarRiesgoSemaforoUI(porcentajeInput ? porcentajeInput.value : null);
+  }
+
   inicializarFormularioActividad() {
     const formWrapper = document.getElementById('form-actividad');
     const form = document.getElementById('actividad-form');
@@ -537,6 +764,8 @@ class ActividadesManager {
           codigoInput.value = '';
         }
         this.actualizarSubprocesosPorArea('', '');
+        this.actualizarLineasTrabajoPorArea('', '');
+        this.actualizarLineasAccionPorEstrategia('', '');
         this.limpiarGeneradorDescripcion();
         const responsableInput = document.getElementById('responsable');
         if (responsableInput) {
@@ -548,6 +777,11 @@ class ActividadesManager {
         this.resetMetaOrtografiaPanel();
         this.setRiesgosTexto('');
         this.resetRiesgosOrtografiaPanel();
+        const riesgoPorcentajeInput = document.getElementById('riesgo_porcentaje');
+        if (riesgoPorcentajeInput) {
+          riesgoPorcentajeInput.value = '';
+        }
+        this.actualizarRiesgoSemaforoUI(null);
         const planSelect = document.getElementById('plan_id');
         if (planSelect) {
           [...planSelect.options].forEach(option => {
@@ -591,7 +825,16 @@ class ActividadesManager {
           mipg: this.resolverValorCatalogo(this.state.catalogos.mipg, data.mipg, data.mipg_nombre),
           objetivo_id: this.resolverValorCatalogo(this.state.catalogos.objetivos, data.objetivo_id, data.objetivo || data.objetivo_nombre),
           estrategia_id: this.resolverValorCatalogo(this.state.catalogos.estrategias, data.estrategia_id, data.estrategia || data.estrategia_nombre),
-          linea_id: this.resolverValorCatalogo(this.state.catalogos.lineas, data.linea_id, data.linea || data.linea_nombre),
+          linea_trabajo_id: this.resolverValorCatalogo(
+            this.state.catalogos.lineasTrabajo,
+            data.linea_trabajo_id || data.linea_trabajo_codigo,
+            data.linea_trabajo || data.linea_trabajo_nombre
+          ),
+          linea_accion_id: this.resolverValorCatalogo(
+            this.state.catalogos.lineas,
+            data.linea_accion_id || data.linea_id,
+            data.linea_accion || data.linea || data.linea_nombre
+          ),
           indicador_texto: data.indicador_detalle || data.indicador_texto || data.indicador || data.indicador_nombre || data.raw?.indicador || '',
           meta_indicador_valor: data.meta_indicador_valor ?? data.meta_valor ?? data.meta ?? '',
           meta_indicador_detalle: data.meta_indicador_detalle || data.meta_texto_completo || data.meta_detalle || data.meta_texto || data.metaDescripcion || data.raw?.meta_indicador_detalle || '',
@@ -603,7 +846,10 @@ class ActividadesManager {
           fecha_inicio_planeada: normalizarFecha(data.fecha_inicio_planeada || data.fecha_inicio),
           fecha_fin_planeada: normalizarFecha(data.fecha_fin_planeada || data.fecha_fin),
           estado: data.estado || data.estadoNombre || 'Planeada',
-          riesgos: data.riesgos || data.riesgo || data.raw?.riesgos || ''
+          riesgos: data.riesgos || data.riesgo || data.raw?.riesgos || '',
+          riesgo_porcentaje: this.normalizarRiesgoPorcentaje(
+            data.riesgo_porcentaje ?? data.riesgoPorcentaje ?? data.raw?.riesgo_porcentaje ?? ''
+          )
         };
 
         inputId.value = valores.id;
@@ -641,11 +887,14 @@ class ActividadesManager {
 
         asignarValor('area_id', valores.area_id);
         this.actualizarSubprocesosPorArea(valores.area_id, valores.subproceso_id);
+        this.actualizarLineasTrabajoPorArea(valores.area_id, valores.linea_trabajo_id);
+        this.actualizarLineasAccionPorEstrategia(valores.estrategia_id, valores.linea_accion_id);
         asignarValor('subproceso_id', valores.subproceso_id);
         asignarValor('mipg_codigo', valores.mipg);
         asignarValor('objetivo_id', valores.objetivo_id);
-        asignarValor('estrategia_id', valores.estrategia_id);
-  asignarValor('linea_id', valores.linea_id);
+          asignarValor('estrategia_id', valores.estrategia_id);
+          asignarValor('linea_trabajo_id', valores.linea_trabajo_id);
+          asignarValor('linea_accion_id', valores.linea_accion_id);
         asignarValor('presupuesto_programado', valores.presupuesto_programado);
         asignarValor('fuente_financiacion', valores.fuente);
         asignarValor('plan_id', valores.plan_ids);
@@ -653,6 +902,8 @@ class ActividadesManager {
         asignarValor('fecha_inicio_planeada', valores.fecha_inicio_planeada);
         asignarValor('fecha_fin_planeada', valores.fecha_fin_planeada);
         asignarValor('estado', valores.estado);
+          asignarValor('riesgo_porcentaje', valores.riesgo_porcentaje);
+          this.actualizarRiesgoSemaforoUI(valores.riesgo_porcentaje);
   this.setIndicadorTexto(valores.indicador_texto);
   this.resetIndicadorOrtografiaPanel({ showPending: Boolean(valores.indicador_texto) });
   const metaNumeroFuente = valores.meta_indicador_valor ?? valores.meta_valor;
@@ -671,6 +922,14 @@ class ActividadesManager {
           ? data.bimestres
           : (Array.isArray(data.raw?.bimestres) ? data.raw.bimestres : []);
         this.setValoresBimestres(bimestresValores);
+
+        if (typeof this.onAreaSelectionChange === 'function') {
+          this.onAreaSelectionChange(valores.area_id, {
+            actividadId: valores.id,
+            presupuestoPlaneado: valores.presupuesto_programado,
+            fechaInicio: valores.fecha_inicio_planeada
+          });
+        }
 
         const descripcionComponentes = {
           descripcion_verbo: data.descripcion_verbo || data.descripcionVerbo || '',
@@ -698,6 +957,19 @@ class ActividadesManager {
       const datos = this.components.formActividad.getValues();
       await this.guardarActividad(datos);
     });
+
+    const fechaInicioInput = document.getElementById('fecha_inicio_planeada');
+    if (fechaInicioInput) {
+      fechaInicioInput.addEventListener('change', () => {
+        if (typeof this.onAreaSelectionChange === 'function') {
+          const areaSelect = document.getElementById('area_id');
+          this.onAreaSelectionChange(areaSelect ? areaSelect.value : '', {
+            fechaInicio: fechaInicioInput.value,
+            presupuestoPlaneado: this.obtenerPresupuestoProgramadoActual()
+          });
+        }
+      });
+    }
 
     const btnCancelar = document.getElementById('btn-cancelar');
     if (btnCancelar) {
@@ -750,6 +1022,7 @@ class ActividadesManager {
       });
     }
 
+    this.inicializarRiesgoSemaforo();
     this.inicializarBimestresSection();
     this.components.formActividad.reset();
   }
@@ -852,6 +1125,22 @@ class ActividadesManager {
     const metaTieneDigitos = /\d/.test((metaFuenteTexto || '').toString());
     const metaNormalizada = this.normalizarMetaValor(metaFuenteTexto);
     const metaValorFinal = metaTieneDigitos ? metaNormalizada : '';
+    const riesgoPorcentaje = this.normalizarRiesgoPorcentaje(datos.riesgo_porcentaje);
+
+    const lineaTrabajoId = datos.linea_trabajo_id || datos.linea_trabajo || '';
+    const lineaAccionId = datos.linea_accion_id || datos.linea_id || '';
+    const lineaTrabajoItem = this.obtenerItemCatalogo(
+      this.state.catalogos.lineasTrabajo,
+      lineaTrabajoId,
+      datos.linea_trabajo || datos.linea_trabajo_nombre
+    );
+    const lineaAccionItem = this.obtenerItemCatalogo(
+      this.state.catalogos.lineas,
+      lineaAccionId,
+      datos.linea_accion || datos.linea || datos.linea_nombre
+    );
+    const lineaTrabajoNombre = lineaTrabajoItem?.nombre || datos.linea_trabajo || '';
+    const lineaAccionNombre = lineaAccionItem?.nombre || datos.linea_accion || datos.linea || '';
 
     const payload = {
       id: datos.id || undefined,
@@ -861,7 +1150,12 @@ class ActividadesManager {
       mipg: datos.mipg || datos.mipg_codigo || '',
       objetivo_id: datos.objetivo_id || '',
       estrategia_id: datos.estrategia_id || '',
-      linea_id: datos.linea_id || '',
+      linea_trabajo_id: lineaTrabajoId || '',
+      linea_trabajo: lineaTrabajoNombre,
+      linea_accion_id: lineaAccionId || '',
+      linea_accion: lineaAccionNombre,
+      linea_id: lineaAccionId || '',
+      linea: lineaAccionNombre,
       indicador: indicadorTexto,
   indicador_id: '',
       meta_indicador_valor: metaValorFinal,
@@ -877,6 +1171,7 @@ class ActividadesManager {
       fecha_inicio_planeada: datos.fecha_inicio_planeada || '',
       fecha_fin_planeada: datos.fecha_fin_planeada || '',
       estado: datos.estado || 'Planeada',
+      riesgo_porcentaje: riesgoPorcentaje !== null ? riesgoPorcentaje : '',
     riesgos: datos.riesgos?.trim() || '',
       descripcion_verbo: datos.descripcion_verbo?.trim() || '',
       descripcion_objeto: datos.descripcion_objeto?.trim() || '',
@@ -1034,7 +1329,11 @@ class ActividadesManager {
         const estadoFiltroNormalizado = normalizar(filtros.estado);
         const estadoCoincide = [
           item.estadoId,
+          item.estadoRevisionNombre,
           item.estadoNombre,
+          item.raw?.estado_revision,
+          item.raw?.estadoRevision,
+          item.raw?.estado_revision_nombre,
           item.raw?.estado,
           item.raw?.estadoNombre,
           item.raw?.estado_id,
@@ -1189,7 +1488,8 @@ Object.assign(
   uiEnhancerMethods,
   activitiesDataMethods,
   descriptionMethods,
-  bimestresMethods
+  bimestresMethods,
+  budgetMethods
 );
 
 export default ActividadesManager;
