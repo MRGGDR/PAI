@@ -1232,9 +1232,23 @@ class ActividadesManager {
 
       mostrarToast(esNueva ? 'Creando actividad...' : 'Actualizando actividad...', 'info');
       const resultado = await apiService.saveActividad(payload);
+      const operacionFallida = !resultado || resultado.success === false;
 
-      if (resultado?.success === false) {
-        throw new Error(resultado.error || 'No fue posible guardar la actividad');
+      if (operacionFallida) {
+        const errores = Array.isArray(resultado?.errors) ? resultado.errors.filter(Boolean) : [];
+        const mensajes = errores
+          .map((mensaje) => (typeof mensaje === 'string' ? mensaje.trim() : ''))
+          .filter(Boolean);
+        const candidatos = [
+          ...mensajes,
+          typeof resultado?.message === 'string' ? resultado.message.trim() : '',
+          typeof resultado?.error === 'string' ? resultado.error.trim() : ''
+        ].filter(Boolean);
+        const mensajeMostrado = candidatos.length ? candidatos[0] : 'No fue posible guardar la actividad';
+
+        console.error('[ERROR] Guardar actividad respondió sin éxito:', resultado);
+        mostrarToast(mensajeMostrado, 'error', { duration: 10000 });
+        return;
       }
 
       mostrarToast(esNueva ? 'Actividad creada correctamente' : 'Actividad actualizada correctamente', 'success');
