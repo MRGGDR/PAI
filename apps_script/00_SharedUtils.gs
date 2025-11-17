@@ -410,12 +410,6 @@ function validateActivityData(activity, operation = 'create') {
     if (!isNotEmpty(activity.descripcion_actividad)) {
       errors.push('Descripción de actividad es requerida');
     }
-    if (!isNotEmpty(activity.subproceso_id)) {
-      errors.push('Subproceso es requerido');
-    }
-    if (!isNotEmpty(activity.linea_id)) {
-      errors.push('Línea de acción es requerida');
-    }
   }
   
   // Validaciones de formato si los campos están presentes
