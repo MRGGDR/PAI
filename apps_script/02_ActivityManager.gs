@@ -34,13 +34,21 @@ const ACTIVITY_HEADERS = [
   'fuente',                 // M - Fuente de financiación (label del catálogo)
   'plan',                   // N - Planes asociados (separados por comas)
   'riesgos',                // O - Riesgos identificados para la actividad
-  'responsable',            // P - Responsable de la actividad
-  'fecha_inicio_planeada',  // Q - Fecha de inicio planeada
-  'fecha_fin_planeada',     // R - Fecha de fin planeada
-  'estado',                 // S - Estado operativo de la actividad
-  'creado_por',             // T - Email del usuario que creó la actividad
-  'creado_el',              // U - Fecha de creación
-  'actualizado_el'          // V - Fecha de última actualización
+  'riesgo_porcentaje',      // P - Nivel de riesgo reportado (porcentaje)
+  'responsable',            // Q - Responsable de la actividad
+  'fecha_inicio_planeada',  // R - Fecha de inicio planeada
+  'fecha_fin_planeada',     // S - Fecha de fin planeada
+  'estado',                 // T - Estado operativo de la actividad
+  'creado_por',             // U - Email del usuario que creó la actividad
+  'creado_el',              // V - Fecha de creación
+  'actualizado_el'          // W - Fecha de última actualización
+];
+
+const RISK_CATEGORY_CONFIG = [
+  { id: 'bajo', label: 'Bajo', min: 0, max: 25 },
+  { id: 'moderado', label: 'Moderado', min: 26, max: 50 },
+  { id: 'alto', label: 'Alto', min: 51, max: 75 },
+  { id: 'critico', label: 'Crítico', min: 76, max: 100 }
 ];
 
 const AREA_ACRONYM_ENTRIES = [
@@ -297,6 +305,7 @@ const FORM_FIELD_MAPPING = {
   'plan_id': 'plan_id',
   'plan_ids': 'plan_ids',
   'riesgos': 'riesgos',
+  'riesgo_porcentaje': 'riesgo_porcentaje',
   'responsable': 'responsable',
   'fecha_inicio_planeada': 'fecha_inicio_planeada',
   'fecha_fin_planeada': 'fecha_fin_planeada',
@@ -462,6 +471,29 @@ function getMetaTextoFromActivity(activity) {
   return metaInfo.texto;
 }
 
+function resolveRiskCategory(percent) {
+  const normalized = normalizeRiskPercentage(percent);
+  if (normalized === null) {
+    return {
+      id: '',
+      label: 'Sin clasificar',
+      min: 0,
+      max: 100,
+      percent: null,
+      rangeLabel: '0% - 100%'
+    };
+  }
+
+  const config = RISK_CATEGORY_CONFIG.find(item => normalized >= item.min && normalized <= item.max)
+    || RISK_CATEGORY_CONFIG[RISK_CATEGORY_CONFIG.length - 1];
+
+  return {
+    ...config,
+    percent: normalized,
+    rangeLabel: `${config.min}% - ${config.max}%`
+  };
+}
+
 function normalizeActivityRecord(activity, fallback) {
   if (!activity || typeof activity !== 'object') {
     return activity;
@@ -478,6 +510,12 @@ function normalizeActivityRecord(activity, fallback) {
   }
 
   const metaInfo = extractMetaComponents(activity, fallback);
+  const rawRiskValue = activity.riesgo_porcentaje !== undefined && activity.riesgo_porcentaje !== ''
+    ? activity.riesgo_porcentaje
+    : (fallback && fallback.riesgo_porcentaje !== undefined ? fallback.riesgo_porcentaje : null);
+  const riskPercent = normalizeRiskPercentage(rawRiskValue);
+  const riskCategory = resolveRiskCategory(riskPercent);
+
   return {
     ...activity,
     estado: estadoNormalizado || activity.estado || '',
@@ -487,7 +525,13 @@ function normalizeActivityRecord(activity, fallback) {
     meta_texto_completo: metaInfo.display,
     meta_texto_original: metaInfo.original,
     meta_indicador_valor: metaInfo.valor,
-    meta_indicador_detalle: metaInfo.display
+    meta_indicador_detalle: metaInfo.display,
+    riesgo_porcentaje: riskPercent,
+    riesgo_categoria: riskCategory.id,
+    riesgo_categoria_label: riskCategory.label,
+    riesgo_categoria_min: riskCategory.min,
+    riesgo_categoria_max: riskCategory.max,
+    riesgo_categoria_rango: riskCategory.rangeLabel
   };
 }
 
@@ -933,6 +977,9 @@ function createActivity(data) {
     const diferenciaMetaBimestres = bimestresValidation.metaDifference;
 
   const planSelection = resolvePlanSelection(data);
+  const riesgoPorcentaje = normalizeRiskPercentage(
+    data.riesgo_porcentaje ?? data.riesgoPorcentaje ?? data.riesgo_percent ?? data.riesgoPercent ?? data.riesgo
+  );
     
     // Generar ID único ANTES de obtener la hoja
     let activityId;
@@ -1015,6 +1062,7 @@ function createActivity(data) {
       plan_labels: planSelection.labels,
     plan: planSelection.labelString,
     riesgos: (data.riesgos || '').toString().trim(),
+    riesgo_porcentaje: riesgoPorcentaje,
   plan_display: planSelection.labelString,
       bimestre_id: data.bimestre_id || '',
       mipg: data.mipg || '',
@@ -1177,6 +1225,7 @@ function createActivity(data) {
   dataForSheet.presupuesto_programado = presupuestoTotal;
     dataForSheet.plan = planSelection.labelString;
     dataForSheet.riesgos = completeData.riesgos;
+    dataForSheet.riesgo_porcentaje = riesgoPorcentaje === null ? '' : riesgoPorcentaje;
     
     // Para responsable, usar el email del usuario si no se proporciona otro valor
     dataForSheet.responsable = data.responsable || userEmail;
@@ -1199,6 +1248,7 @@ function createActivity(data) {
   completeData.subproceso = dataForSheet.subproceso;
   completeData.plan = dataForSheet.plan;
   completeData.riesgos = dataForSheet.riesgos;
+  completeData.riesgo_porcentaje = riesgoPorcentaje;
   completeData.fuente = dataForSheet.fuente;
   completeData.fecha_inicio_planeada = dataForSheet.fecha_inicio_planeada;
   completeData.fecha_fin_planeada = dataForSheet.fecha_fin_planeada;
@@ -1753,6 +1803,10 @@ function prepareActivityData(activityId, data, operation) {
   prepared.plan_labels = planData.labels;
   prepared.plan_display = planData.labelString;
   prepared.riesgos = (data.riesgos || '').toString().trim();
+  const preparedRiskPercent = normalizeRiskPercentage(
+    data.riesgo_porcentaje ?? data.riesgoPorcentaje ?? data.riesgo_percent ?? data.riesgoPercent
+  );
+  prepared.riesgo_porcentaje = preparedRiskPercent === null ? '' : preparedRiskPercent;
   prepared.responsable = data.responsable || '';
   // Asegurar que las fechas se almacenen como texto YYYY-MM-DD
   prepared.fecha_inicio_planeada = normalizeDateInput(data.fecha_inicio_planeada) || '';
@@ -1907,6 +1961,18 @@ function ensureSheetHeaders(sheet, headers) {
 
   if (desiredCodigoIndex !== -1 && currentCodigoIndex === -1) {
     sheet.insertColumnAfter(1);
+    lastColumn = Math.max(sheet.getLastColumn(), headers.length);
+    currentHeaders = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  }
+
+  const desiredRiskIndex = headers.indexOf('riesgo_porcentaje');
+  const currentRiskIndex = currentHeaders.indexOf('riesgo_porcentaje');
+
+  if (desiredRiskIndex !== -1 && currentRiskIndex === -1) {
+    const responsableIndex = currentHeaders.indexOf('responsable');
+    const fallbackPosition = Math.min(desiredRiskIndex + 1, headers.length);
+    const insertPosition = Math.max(1, responsableIndex !== -1 ? responsableIndex + 1 : fallbackPosition);
+    sheet.insertColumnBefore(insertPosition);
     lastColumn = Math.max(sheet.getLastColumn(), headers.length);
     currentHeaders = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
   }
@@ -2314,9 +2380,6 @@ function sendActivityReviewNotification(actividad, estado, comentarios, revisor)
 
     if (revisor && typeof revisor === 'string' && revisor.indexOf('@') !== -1) {
       mailOptions.replyTo = revisor;
-      if (revisor !== destinatario) {
-        mailOptions.cc = revisor;
-      }
     }
 
     MailApp.sendEmail(mailOptions);

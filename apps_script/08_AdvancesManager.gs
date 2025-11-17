@@ -553,7 +553,11 @@ function resolveAvanceRecipientEmail(avance) {
     avance.enviado_por,
     avance.registrado_por,
     avance.usuario,
-    avance.responsable
+    avance.responsable,
+    avance.responsable_correo,
+    avance.responsable_email,
+    avance.creado_por,
+    avance.creadoPor
   );
 
   for (var i = 0; i < candidatos.length; i++) {
@@ -571,11 +575,94 @@ function resolveAvanceRecipientEmail(avance) {
   return '';
 }
 
-function buildAvanceStatusEmailContent(avance, estado, comentarios, revisor, codigoRef) {
+function getAvancePreferredActivityCode(avance) {
+  if (!avance || typeof avance !== 'object') {
+    return '';
+  }
+
+  const candidatos = [
+    avance.codigo,
+    avance.actividad_codigo,
+    avance.actividadCodigo,
+    avance.codigo_actividad,
+    avance.codigoActividad,
+    avance.actividad?.codigo,
+    avance.actividad?.codigo_actividad,
+    avance.actividad?.codigoActividad
+  ];
+
+  for (var i = 0; i < candidatos.length; i++) {
+    var candidato = candidatos[i];
+    if (candidato === null || candidato === undefined) continue;
+    var texto = candidato.toString().trim();
+    if (texto) {
+      return texto;
+    }
+  }
+
+  if (avance.actividad_id && typeof getActivityById === 'function') {
+    try {
+      var actividadResultado = getActivityById(avance.actividad_id);
+      if (actividadResultado && actividadResultado.success && actividadResultado.data) {
+        var preferido = typeof getActivityPreferredCode === 'function'
+          ? getActivityPreferredCode(actividadResultado.data)
+          : '';
+        if (preferido) {
+          return preferido;
+        }
+      }
+    } catch (lookupError) {
+      console.warn('getAvancePreferredActivityCode lookup error:', lookupError);
+    }
+  }
+
+  return '';
+}
+
+function getAvanceBimestreLabel(avance) {
+  if (!avance || typeof avance !== 'object') {
+    return '';
+  }
+
+  try {
+    var metadata = resolveBimestreMetadataFromPayload(avance) || {};
+    var etiqueta = metadata.label || '';
+    if (etiqueta) {
+      return etiqueta.toString().trim();
+    }
+    if (metadata.index) {
+      return 'Bimestre ' + metadata.index;
+    }
+  } catch (error) {
+    console.warn('getAvanceBimestreLabel error:', error);
+  }
+
+  const candidatos = [
+    avance.bimestre_nombre,
+    avance.bimestre,
+    avance.bimestreLabel,
+    avance.bimestre_id,
+    avance.bimestreId
+  ];
+
+  for (var i = 0; i < candidatos.length; i++) {
+    var candidato = candidatos[i];
+    if (candidato === null || candidato === undefined) continue;
+    var texto = candidato.toString().trim();
+    if (texto) {
+      return texto;
+    }
+  }
+
+  return '';
+}
+
+function buildAvanceStatusEmailContent(avance, estado, comentarios, revisor, codigoActividad, bimestreLabel) {
   const canonicalEstado = normalizeReviewStateValue(estado) || estado || 'Sin revisión';
   const actividad = (avance && typeof avance.actividad === 'object') ? avance.actividad : null;
   const actividadDescripcion = actividad?.descripcion_actividad || actividad?.descripcion || actividad?.nombre || avance?.actividad_nombre || avance?.actividad || avance?.actividad_id || 'Actividad registrada';
-  const bimestre = avance?.bimestre_nombre || avance?.bimestre_id || avance?.bimestre || '';
+  const bimestre = bimestreLabel || avance?.bimestre_nombre || avance?.bimestre_id || avance?.bimestre || '';
+  const codigo = codigoActividad || avance?.codigo || avance?.actividad_codigo || '';
   const comentariosTexto = comentarios ? comentarios.toString().trim() : '';
   const comentariosHtml = comentariosTexto ? escapeHtml(comentariosTexto).replace(/\r?\n/g, '<br>') : '';
 
@@ -621,9 +708,14 @@ function buildAvanceStatusEmailContent(avance, estado, comentarios, revisor, cod
     textParts.push(comentariosTexto);
   }
 
-  if (codigoRef) {
-    htmlParts.push(`<p>Referencia: <strong>${escapeHtml(codigoRef)}</strong></p>`);
-    textParts.push(`Referencia: ${codigoRef}`);
+  if (codigo) {
+    htmlParts.push(`<p>Código de la actividad: <strong>${escapeHtml(codigo)}</strong></p>`);
+    textParts.push(`Código de la actividad: ${codigo}`);
+  }
+
+  if (bimestre) {
+    htmlParts.push(`<p>Bimestre reportado: <strong>${escapeHtml(bimestre)}</strong></p>`);
+    textParts.push(`Bimestre reportado: ${bimestre}`);
   }
 
   if (revisor && revisor.indexOf('@') !== -1) {
@@ -650,10 +742,20 @@ function sendAvanceReviewNotification(avance, estado, comentarios, revisor) {
     }
 
     const estadoLabel = normalizeReviewStateValue(estado) || estado || 'Sin revisión';
-    const codigoRef = avance?.avance_id || avance?.codigo || avance?.actividad_codigo || '';
-    const asunto = codigoRef ? `${codigoRef} "${estadoLabel}"` : `Avance "${estadoLabel}"`;
+    const codigoActividad = getAvancePreferredActivityCode(avance);
+    const bimestreLabel = getAvanceBimestreLabel(avance);
+    const asuntoReferencia = [];
+    if (codigoActividad) {
+      asuntoReferencia.push(codigoActividad);
+    }
+    if (bimestreLabel) {
+      asuntoReferencia.push(bimestreLabel);
+    }
+    const asunto = asuntoReferencia.length
+      ? `${asuntoReferencia.join(' · ')} "${estadoLabel}"`
+      : `Avance "${estadoLabel}"`;
 
-    const contenido = buildAvanceStatusEmailContent(avance, estadoLabel, comentarios, revisor, codigoRef);
+    const contenido = buildAvanceStatusEmailContent(avance, estadoLabel, comentarios, revisor, codigoActividad, bimestreLabel);
 
     const mailOptions = {
       to: destinatario,
@@ -665,9 +767,6 @@ function sendAvanceReviewNotification(avance, estado, comentarios, revisor) {
 
     if (revisor && typeof revisor === 'string' && revisor.indexOf('@') !== -1) {
       mailOptions.replyTo = revisor;
-      if (revisor !== destinatario) {
-        mailOptions.cc = revisor;
-      }
     }
 
     MailApp.sendEmail(mailOptions);

@@ -354,6 +354,49 @@ function isFutureDate(dateString) {
 }
 
 /**
+ * Normaliza un valor porcentual de riesgo a número entre 0 y 100
+ * @param {any} value - Valor a normalizar
+ * @returns {number|null} Porcentaje normalizado o null si no es válido
+ */
+function normalizeRiskPercentage(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'number' && isFinite(value)) {
+    const boundedNumber = Math.min(100, Math.max(0, value));
+    return Math.round(boundedNumber * 100) / 100;
+  }
+
+  try {
+    const rawText = value.toString().trim();
+    if (!rawText) {
+      return null;
+    }
+
+    const sanitized = rawText
+      .replace(/%/g, '')
+      .replace(/,/g, '.')
+      .replace(/\s+/g, '')
+      .replace(/[^0-9.+-]/g, '');
+
+    if (!sanitized) {
+      return null;
+    }
+
+    const numeric = parseFloat(sanitized);
+    if (!isFinite(numeric)) {
+      return null;
+    }
+
+    const bounded = Math.min(100, Math.max(0, numeric));
+    return Math.round(bounded * 100) / 100;
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
  * Valida estructura básica de actividad
  * @param {Object} activity - Datos de actividad
  * @param {string} operation - Operación ('create', 'update')
@@ -401,6 +444,19 @@ function validateActivityData(activity, operation = 'create') {
     const fin = new Date(activity.fecha_fin_planeada);
     if (fin <= inicio) {
       errors.push('Fecha de fin debe ser posterior a fecha de inicio');
+    }
+  }
+
+  if (
+    activity.riesgo_porcentaje !== undefined &&
+    activity.riesgo_porcentaje !== null &&
+    activity.riesgo_porcentaje !== ''
+  ) {
+    const normalizedRisk = normalizeRiskPercentage(activity.riesgo_porcentaje);
+    if (normalizedRisk === null) {
+      errors.push('El porcentaje de riesgo debe ser un número entre 0 y 100');
+    } else {
+      activity.riesgo_porcentaje = normalizedRisk;
     }
   }
   

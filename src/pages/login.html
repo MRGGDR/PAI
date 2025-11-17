@@ -18,7 +18,7 @@
     const h = (typeof location !== 'undefined' && location.hostname) ? location.hostname : '';
     // Treat localhost and common private LAN ranges as development hosts
     const isLocalHost = h === 'localhost' || h === '127.0.0.1' || /^192\.168\./.test(h) || /^10\./.test(h) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(h);
-      const REMOTE_BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzdid5JqHEArgvL5lQ8L9nv_RCO82rm0EVc5CJiOJE031EoI_0EebxoFtOfU0RiOmo31A/exec';
+      const REMOTE_BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxMDnMgmOSwv8TRhfcxKUX7aQvI5cN3DOMZ7xk1jr3v6FoQqPi5Yx86vRQEq47z-_nv/exec';
     const LOCAL_PROXY_URL = 'http://localhost:3000/api';
     let useLocalProxy = false;
     try {
@@ -31,7 +31,7 @@
             if (!window.APP_CONFIG_OVERRIDE.BASE_URL) {
               window.APP_CONFIG_OVERRIDE.BASE_URL = useLocalProxy ? LOCAL_PROXY_URL : REMOTE_BACKEND_URL;
             }
-            console.log('Dev: APP_CONFIG_OVERRIDE.BASE_URL =', window.APP_CONFIG_OVERRIDE.BASE_URL);
+            // Removed noisy console log to keep login console clean
           }
         } catch (e) { /* ignore */ }
       })();
@@ -59,7 +59,7 @@
                   <img src="../assets/Logo_gris.png" alt="Logo" class="form-logo" loading="lazy" onerror="this.style.display='none'">
                   <h1 class="system-name">PAI 2026</h1>
                   <h2 class="form-welcome-title">¡Hola, <span style='color: #FFD600'>Bienvenido!</span></h2>
-                  <p class="form-welcome-subtitle">Plataforma de administración e información para el Plan de Acción Institucional 2025</p>
+                  <p class="form-welcome-subtitle">Plataforma de administración e información para el Plan de Acción Institucional 2026</p>
                 </div>
                 <div class="field">
                   <input autocomplete="off" placeholder="@gestiondelriego.gov.co" class="input-field" type="email" id="email" name="email" required>

@@ -37,6 +37,44 @@ function obtenerAreaIdAsignada() {
   return id ? String(id).trim() : '';
 }
 
+function obtenerAreaIdParaFormulario() {
+  const select = document.getElementById('area_id');
+  const selectValue = select && typeof select.value === 'string' ? select.value.trim() : '';
+  if (selectValue) {
+    return selectValue;
+  }
+
+  const areaIdAsignada = typeof this.obtenerAreaIdAsignada === 'function'
+    ? this.obtenerAreaIdAsignada()
+    : '';
+  if (areaIdAsignada) {
+    return areaIdAsignada;
+  }
+
+  const areaPreferida = typeof this.obtenerAreaAsignadaUsuario === 'function'
+    ? this.obtenerAreaAsignadaUsuario()
+    : '';
+  if (!areaPreferida) {
+    return '';
+  }
+
+  const coincidencia = Array.isArray(this.state?.catalogos?.areas)
+    ? this.state.catalogos.areas.find(item =>
+        coincideAreaUsuario(areaPreferida, [
+          item?.id,
+          item?.nombre,
+          item?.raw?.label,
+          item?.raw?.nombre,
+          item?.raw?.descripcion,
+          item?.raw?.codigo,
+          item?.raw?.code
+        ])
+      )
+    : null;
+
+  return coincidencia ? String(coincidencia.id) : '';
+}
+
 function sincronizarAreaUsuarioConCatalogos() {
   const areaTexto = this.state?.usuario?.area || '';
   if (!this.debeRestringirPorArea()) {
@@ -664,6 +702,7 @@ export const catalogMethods = {
   debeRestringirPorArea,
   obtenerAreaAsignadaUsuario,
   obtenerAreaIdAsignada,
+  obtenerAreaIdParaFormulario,
   sincronizarAreaUsuarioConCatalogos,
   coincideActividadConArea,
   aplicarRestriccionAreaEnListado,

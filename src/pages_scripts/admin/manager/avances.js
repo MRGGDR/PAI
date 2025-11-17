@@ -3,6 +3,16 @@ import { mostrarToast, obtenerEmailUsuarioActual } from '../../actividades/utils
 import { showLoaderDuring } from '../../../lib/loader.js';
 import { ADMIN_LOADER_MESSAGE } from './constants.js';
 
+const REVIEW_STATES_REQUIRING_MESSAGE = new Set(['Corrección']);
+const REVIEW_STATES_TRIGGER_EMAIL = new Set(['Corrección', 'En revisión', 'Aprobado', 'Cancelado']);
+const REVIEW_STATE_MESSAGE_TEMPLATES = {
+  'Sin revisión': 'El avance volverá al estado inicial sin notificar cambios al responsable.',
+  'En revisión': 'El avance quedará en revisión mientras el equipo administrador valida la información.',
+  'Aprobado': 'El avance será aprobado. Gracias por mantener los reportes actualizados.',
+  'Corrección': 'Se solicitarán correcciones sobre el avance registrado. Detalla los ajustes necesarios para el responsable.',
+  'Cancelado': 'El avance se marcará como cancelado y no requerirá acciones adicionales.'
+};
+
 export const avancesMethods = {
   async loadAvances(force = false) {
     try {
@@ -55,7 +65,7 @@ export const avancesMethods = {
         const actividad = (item.actividad_id || item.actividad || '').toString().toLowerCase();
         const bimestre = (item.bimestre_id || item.bimestre || '').toString().toLowerCase();
         const responsable = (item.reportado_por || '').toString().toLowerCase();
-  const estadoRevision = (item.estado_revision || item.estadoRevision || '').toString().toLowerCase();
+        const estadoRevision = (item.estado_revision || item.estadoRevision || '').toString().toLowerCase();
         return codigoActividad.includes(normalized) || actividad.includes(normalized) || bimestre.includes(normalized) || responsable.includes(normalized) || estadoRevision.includes(normalized);
       });
     }
@@ -87,27 +97,39 @@ export const avancesMethods = {
           actividad = actividad.descripcion_actividad || actividad.descripcion || actividad.nombre || actividad.titulo || actividad.label || actividad.id || actividad.codigo || 'Sin actividad';
         }
         actividad = actividad || 'Sin actividad';
-    const bimestre = item.bimestre_id || item.bimestre || 'Sin bimestre';
-    const responsable = item.reportado_por || 'Sin responsable';
-    const estadoRevision = item.estado_revision || item.estadoRevision || 'Sin revisión';
-    const estadoHtml = this.renderEstadoRevisionBadge(estadoRevision);
-        const codigoActividad = (this.obtenerActividadCodigo?.(item) || item.actividad_codigo || item.codigo || '').toString().trim() || actividad;
+        const codigoActividad = (this.obtenerActividadCodigo?.(item) || item.actividad_codigo || item.codigo || '').toString().trim();
+        const bimestre = item.bimestre_nombre || item.bimestre_id || item.bimestre || 'Sin bimestre';
+        const responsable = item.reportado_por || item.responsable || 'Sin responsable';
+        const estadoRevisionRaw = item.estado_revision || item.estadoRevision || 'Sin revisión';
+        const estadoRevision = this.normalizarEstadoRevision ? this.normalizarEstadoRevision(estadoRevisionRaw) : estadoRevisionRaw;
+        const estadoHtml = this.renderEstadoRevisionBadge(estadoRevision);
         const fecha = item.fecha_reporte ? this.formatearFecha(item.fecha_reporte) : 'Sin fecha';
 
         const fila = document.createElement('tr');
         fila.dataset.id = id;
+        fila.dataset.codigo = codigoActividad || '';
+        fila.dataset.bimestre = bimestre || '';
+        fila.dataset.estadoRevision = estadoRevision || '';
+
+        const codigoSafe = this.escapeHtml(codigoActividad || actividad || 'Sin código');
+        const actividadSafe = this.escapeHtml(actividad);
+        const bimestreSafe = this.escapeHtml(bimestre || 'Sin bimestre');
+        const responsableSafe = this.escapeHtml(responsable || 'Sin responsable');
+        const fechaSafe = this.escapeHtml(fecha || 'Sin fecha');
+        const idSafe = this.escapeHtml(id || 'N/A');
+
         fila.innerHTML = `
-          <td class="px-3 py-2 text-left text-sm font-mono text-gray-700">${id || 'N/A'}</td>
+          <td class="px-3 py-2 text-left text-sm font-mono text-gray-700">${idSafe}</td>
           <td class="px-3 py-2 text-sm text-gray-900">
-            <div class="font-mono text-xs uppercase tracking-wide text-indigo-600">${codigoActividad}</div>
+            <div class="font-mono text-xs uppercase tracking-wide text-indigo-600">${codigoSafe}</div>
           </td>
-          <td class="px-3 py-2 text-sm text-gray-900">${actividad}</td>
+          <td class="px-3 py-2 text-sm text-gray-900">${actividadSafe}</td>
           <td class="px-3 py-2 text-sm text-gray-500">
-            <div>${bimestre}</div>
+            <div>${bimestreSafe}</div>
             <div class="mt-1">${estadoHtml}</div>
           </td>
-          <td class="px-3 py-2 text-sm text-gray-500">${responsable}</td>
-          <td class="px-3 py-2 text-sm text-gray-500">${fecha}</td>
+          <td class="px-3 py-2 text-sm text-gray-500">${responsableSafe}</td>
+          <td class="px-3 py-2 text-sm text-gray-500">${fechaSafe}</td>
           <td class="px-3 py-2 text-right">
             <div class="flex justify-end gap-2">
               <button type="button" class="inline-flex items-center gap-1 rounded-md border border-green-200 px-2 py-1 text-xs font-medium text-green-600 hover:border-green-300 hover:text-green-700" data-action="approve" data-id="${id}">
@@ -183,61 +205,89 @@ export const avancesMethods = {
       return;
     }
 
-    const configuracion = {
-      approve: {
-        estado: 'Aprobado',
-        confirmacion: `¿Confirmas marcar el avance "${avanceId}" como aprobado?`,
-        loader: 'Marcando avance como aprobado...'
-      },
-      'mark-review': {
-        estado: 'En revisión',
-        confirmacion: `¿Confirmas marcar el avance "${avanceId}" en revisión?`,
-        loader: 'Actualizando estado de revisión...'
-      },
-      'request-changes': {
-        estado: 'Corrección requerida',
-        confirmacion: `¿Solicitar correcciones para el avance "${avanceId}"?`,
-        loader: 'Solicitando correcciones...',
-        requiereComentarios: true
-      }
-    };
+    const estadoObjetivo = {
+      approve: 'Aprobado',
+      'mark-review': 'En revisión',
+      'request-changes': 'Corrección'
+    }[accion];
 
-    const opciones = configuracion[accion];
-    if (!opciones) return;
+    if (!estadoObjetivo) {
+      return;
+    }
 
-    const confirmado = window.confirm(opciones.confirmacion);
-    if (!confirmado) return;
+    const estadoSeleccionado = this.normalizarEstadoRevision ? this.normalizarEstadoRevision(estadoObjetivo) : estadoObjetivo;
+    const estadoActual = this.normalizarEstadoRevision
+      ? this.normalizarEstadoRevision(avance?.estado_revision || avance?.estadoRevision || 'Sin revisión')
+      : (avance?.estado_revision || avance?.estadoRevision || 'Sin revisión');
 
-    let comentarios = '';
-    if (opciones.requiereComentarios) {
-      comentarios = window.prompt('Describe brevemente las correcciones requeridas:', avance?.revision_comentarios || '') || '';
-      if (!comentarios.trim()) {
-        mostrarToast('Debes ingresar comentarios para solicitar correcciones.', 'warning');
-        return;
-      }
+    const requiereComentario = REVIEW_STATES_REQUIRING_MESSAGE.has(estadoSeleccionado);
+    const enviaCorreo = REVIEW_STATES_TRIGGER_EMAIL.has(estadoSeleccionado);
+    const mensajeEstado = REVIEW_STATE_MESSAGE_TEMPLATES[estadoSeleccionado] || '';
+
+    const codigoActividad = this.obtenerActividadCodigo?.(avance) || avance.actividad_codigo || avance.codigo || '';
+    const bimestre = avance.bimestre_nombre || avance.bimestre || avance.bimestre_id || '';
+    const responsable = avance.reportado_por || avance.responsable || '';
+    const referencia = [codigoActividad, bimestre].filter(Boolean).join(' · ') || avanceId;
+
+    const descripcionPartes = [];
+    if (mensajeEstado) {
+      descripcionPartes.push(`<p>${this.escapeHtml(mensajeEstado)}</p>`);
+    }
+    if (enviaCorreo) {
+      const destinatario = responsable
+        ? `<strong>${this.escapeHtml(responsable)}</strong>`
+        : 'el responsable registrado';
+      descripcionPartes.push(`<p>Se enviará una notificación a ${destinatario} con el resumen del cambio.</p>`);
+    }
+
+    const notaPartes = [];
+    notaPartes.push('<p>El asunto del correo incluirá el código de la actividad y el bimestre reportado.</p>');
+    if (enviaCorreo) {
+      notaPartes.push('<p>La notificación se enviará inmediatamente después de confirmar el cambio.</p>');
+    }
+
+    const resultadoDialogo = await this.mostrarDialogoEstado({
+      titulo: `Actualizar avance ${referencia}`,
+      estado: estadoSeleccionado,
+      estadoSecundarioHtml: estadoActual ? `Estado actual: ${this.escapeHtml(estadoActual)}` : '',
+      descripcionHtml: descripcionPartes.join(''),
+      notaHtml: notaPartes.join(''),
+      requiereComentario,
+      comentarioInicial: avance?.revision_comentarios || '',
+      comentarioLabel: requiereComentario ? 'Observaciones para el responsable' : 'Mensaje adicional (opcional)',
+      comentarioPlaceholder: requiereComentario ? 'Describe las correcciones solicitadas...' : 'Puedes agregar detalles adicionales para el responsable...',
+      autoFocus: true,
+      colocarCursorAlFinal: true
+    });
+
+    if (!resultadoDialogo) {
+      return;
     }
 
     const revisor = this.state?.usuario?.email || obtenerEmailUsuarioActual();
     const payload = {
       avance_id: avanceId,
-      estado_revision: opciones.estado,
+      estado_revision: estadoSeleccionado,
       revisor
     };
 
-    if (comentarios.trim()) {
-      payload.comentarios = comentarios.trim();
+    if (resultadoDialogo.comentario) {
+      payload.comentarios = resultadoDialogo.comentario;
     }
+
+    const loaderMensaje = `Actualizando avance (${estadoSeleccionado})...`;
+    const mensajeExito = `Avance ${referencia} actualizado (${estadoSeleccionado}).`;
 
     try {
       await showLoaderDuring(
         () => actividadesApi.reviewAvance(payload),
-        opciones.loader,
+        loaderMensaje,
         'solid',
         300
       );
 
       mostrarToast('Estado de revisión del avance actualizado.', 'success');
-      this.mostrarMensajeAvance(`Avance ${avanceId} actualizado (${opciones.estado}).`, 'success');
+      this.mostrarMensajeAvance(mensajeExito, 'success');
       await this.loadAvances(true);
     } catch (error) {
       console.error('[ERROR] procesarAccionRevisionAvance:', error);

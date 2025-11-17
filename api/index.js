@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
     }
 
     // Usar la variable de entorno APPS_SCRIPT_URL o un valor predeterminado de config.js
-  const defaultUrl = 'https://script.google.com/macros/s/AKfycbzdid5JqHEArgvL5lQ8L9nv_RCO82rm0EVc5CJiOJE031EoI_0EebxoFtOfU0RiOmo31A/exec';
+  const defaultUrl = 'https://script.google.com/macros/s/AKfycbxMDnMgmOSwv8TRhfcxKUX7aQvI5cN3DOMZ7xk1jr3v6FoQqPi5Yx86vRQEq47z-_nv/exec';
     const target = process.env.APPS_SCRIPT_URL || defaultUrl;
     
     if (!target) {

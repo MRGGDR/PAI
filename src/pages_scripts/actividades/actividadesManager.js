@@ -1201,6 +1201,15 @@ class ActividadesManager {
         throw new Error('La descripción de la actividad es obligatoria');
       }
       if (!datosFormulario.area_id) {
+        const areaResuelta = typeof this.obtenerAreaIdParaFormulario === 'function'
+          ? this.obtenerAreaIdParaFormulario()
+          : '';
+        if (areaResuelta) {
+          // Reinyecta el área asignada cuando el select está bloqueado para el usuario.
+          datosFormulario.area_id = areaResuelta;
+        }
+      }
+      if (!datosFormulario.area_id) {
         throw new Error('Debe seleccionar un área');
       }
 
