@@ -18,7 +18,7 @@
     const h = (typeof location !== 'undefined' && location.hostname) ? location.hostname : '';
     // Treat localhost and common private LAN ranges as development hosts
     const isLocalHost = h === 'localhost' || h === '127.0.0.1' || /^192\.168\./.test(h) || /^10\./.test(h) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(h);
-      const REMOTE_BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzTl9dyEEbAN6fK8519CI31ejVOTdI7zTV710WOay2zGF8go5lLld9yOGm4tkev5EVxjw/exec';
+      const REMOTE_BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxgt5fpDd1PDjSd6MQyAij2fUNUFigDVDLf2jCfwq8e9sPBC1hhxQxzDgdKKGasdtixRg/exec';
     const LOCAL_PROXY_URL = 'http://localhost:3000/api';
     let useLocalProxy = false;
     try {

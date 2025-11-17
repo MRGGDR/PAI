@@ -1099,7 +1099,7 @@ function createActivity(data) {
   console.log('[DEBUG] createActivity: Resolviendo códigos a labels...');
     const dataForSheet = { ...completeData };
     
-    // Resolver área (derivada del subproceso)
+    // Resolver área (priorizando subproceso y luego el área seleccionada directamente)
     if (data.subproceso_id) {
       const subprocesoResult = getCatalogByCode(data.subproceso_id);
       if (subprocesoResult.success) {
@@ -1127,6 +1127,17 @@ function createActivity(data) {
     } else {
       dataForSheet.subproceso = '';
       dataForSheet.area = '';
+    }
+
+    if (!dataForSheet.area && data.area_id) {
+      const areaResult = getCatalogByCode(data.area_id);
+      if (areaResult.success) {
+        console.log(` [OK] Área resuelta directamente: ${data.area_id} -> ${areaResult.data.label}`);
+        dataForSheet.area = areaResult.data.label;
+      } else {
+        console.log(` [WARN] No se pudo resolver área directamente, usando código recibido: ${data.area_id}`);
+        dataForSheet.area = data.area_id;
+      }
     }
     
     // Resolver línea de trabajo
@@ -1707,6 +1718,13 @@ function enrichActivityWithCatalogData(activityData) {
             enriched.area_nombre = area.data.label;
           }
         }
+      }
+    }
+
+    if (!enriched.area_nombre && activityData.area_id) {
+      const areaDirect = getCatalogByCode(activityData.area_id);
+      if (areaDirect.success) {
+        enriched.area_nombre = areaDirect.data.label;
       }
     }
     

@@ -18,7 +18,7 @@ const _fromWindow = (typeof window !== 'undefined'
   : '';
 
 /** URL del Apps Script desplegado (backend real) */
-export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzTl9dyEEbAN6fK8519CI31ejVOTdI7zTV710WOay2zGF8go5lLld9yOGm4tkev5EVxjw/exec';
+export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgt5fpDd1PDjSd6MQyAij2fUNUFigDVDLf2jCfwq8e9sPBC1hhxQxzDgdKKGasdtixRg/exec';
 
 /** URL del proxy local opcional */
 export const LOCAL_PROXY_URL = 'http://localhost:3000/api';

@@ -67,7 +67,7 @@ class ApiService {
         console.error('[ERROR] Error resolviendo URL del backend:', error);
 
         // Si falla, usar el valor predeterminado
-  this.backendUrl = 'https://script.google.com/macros/s/AKfycbzTl9dyEEbAN6fK8519CI31ejVOTdI7zTV710WOay2zGF8go5lLld9yOGm4tkev5EVxjw/exec';
+  this.backendUrl = 'https://script.google.com/macros/s/AKfycbxgt5fpDd1PDjSd6MQyAij2fUNUFigDVDLf2jCfwq8e9sPBC1hhxQxzDgdKKGasdtixRg/exec';
 
         console.warn('[WARN] Usando URL de backend por defecto:', this.backendUrl);
       }

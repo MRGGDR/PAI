@@ -45,7 +45,7 @@ export function shouldUseTextPlain(url) {
  * @returns {string} URL del backend
  */
 export function resolveScriptUrl() {
-  const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzTl9dyEEbAN6fK8519CI31ejVOTdI7zTV710WOay2zGF8go5lLld9yOGm4tkev5EVxjw/exec';
+  const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgt5fpDd1PDjSd6MQyAij2fUNUFigDVDLf2jCfwq8e9sPBC1hhxQxzDgdKKGasdtixRg/exec';
   const DEFAULT_DEV_URL = 'http://localhost:3000/api';
   let scriptUrl = null;
 
