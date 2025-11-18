@@ -1,6 +1,6 @@
 <small>Última revisión: 2025-10-28</small>
 
-# PAI — Plataforma de Administración de Indicadores (PAI_V1)
+# PAI: Plataforma de Administración de Indicadores (PAI_V1)
 
 SPA para planificar actividades institucionales, distribuir metas y presupuesto por bimestres, registrar avances y seguir revisiones. El frontend está escrito con módulos ES y manipulación directa del DOM; el backend vive en Google Apps Script expuesto como Web App y persistente en Google Sheets. Un proxy serverless (`api/index.js`) permite enrutar llamadas desde el navegador con CORS controlado.
 
@@ -37,7 +37,7 @@ Este README es la guía maestra. Condensa la información técnica publicada en 
 **Ciclo de una petición típica** (crear actividad):
 1. Usuario llena el formulario (`src/pages/actividades.html` + `actividades/index.js`).
 2. `ActividadesManager` arma payload, valida distribución bimestral y llama a `apiService.saveActividad` (`src/pages_scripts/actividades/api.js`).
-3. `apiService` invoca `callBackend('actividades/crear', payload)` contra `resolveScriptUrl()` (Apps Script o proxy).
+3. `apiService` invoca `callBackend('actividades/crear', payload)` y la llamada viaja a `/api`; la función serverless reenvía al Apps Script configurado.
 4. `03_Backend.gs` resuelve ruta, aplica `requiresAuthentication`, delega a `02_ActivityManager.gs`.
 5. Manager valida con `validateActivityData` (`00_SharedUtils.gs`), genera código, escribe en hoja y retorna `formatResponse`.
 6. Frontend normaliza respuesta, actualiza tabla/tarjetas con `TableManager` y `CardsManager`, muestra toast vía `UI.toast`.
@@ -48,16 +48,16 @@ Este README es la guía maestra. Condensa la información técnica publicada en 
 
 Cada carpeta clave tiene su README específico. Usa este listado para profundizar:
 
-- `apps_script/APPS_SCRIPT_README.md` — routers, managers y payloads de Google Apps Script.
-- `public/PUBLIC_README.md` — demo del checker ortográfico, estructura de diccionarios y Typo.js.
-- `src/lib/LIB_README.md` — catálogo completo de utilidades frontend.
-- `src/pages/PAGES_README.md` — anatomía de cada HTML.
-- `src/pages_scripts/PAGES_SCRIPTS_README.md` — entrypoints por página.
-- `src/pages_scripts/actividades/ACTIVIDADES_README.md` y `manager/ACTIVIDADES_MANAGER_README.md` — detalles del gestor de actividades.
-- `src/pages_scripts/avances/AVANCES_README.md` — modal, filtros, analytics y trazas.
-- `src/pages_scripts/admin/ADMIN_README.md` y `manager/ADMIN_MANAGER_README.md` — panel administrativo.
-- `src/styles/STYLES_README.md` — estilos, controles reutilizables y recomendaciones.
-- `CHANGELOG.md` — cronología de cambios (2025-09-01 → 2025-10-28).
+- `apps_script/APPS_SCRIPT_README.md`: routers, managers y payloads de Google Apps Script.
+- `public/PUBLIC_README.md`: demo del checker ortográfico, estructura de diccionarios y Typo.js.
+- `src/lib/LIB_README.md`: catálogo completo de utilidades frontend.
+- `src/pages/PAGES_README.md`: anatomía de cada HTML.
+- `src/pages_scripts/PAGES_SCRIPTS_README.md`: entrypoints por página.
+- `src/pages_scripts/actividades/ACTIVIDADES_README.md` y `manager/ACTIVIDADES_MANAGER_README.md`: detalles del gestor de actividades.
+- `src/pages_scripts/avances/AVANCES_README.md`: modal, filtros, analytics y trazas.
+- `src/pages_scripts/admin/ADMIN_README.md` y `manager/ADMIN_MANAGER_README.md`: panel administrativo.
+- `src/styles/STYLES_README.md`: estilos, controles reutilizables y recomendaciones.
+- `CHANGELOG.md`: cronología de cambios (2025-09-01 -> 2025-10-28).
 
 ---
 
@@ -75,7 +75,7 @@ Cada carpeta clave tiene su README específico. Usa este listado para profundiza
 
 ### 4.1 Biblioteca compartida (`src/lib`)
 - `config.js`: detecta ambiente (override en `window.APP_CONFIG_OVERRIDE`, flag local en `localStorage`) y resuelve `BASE_URL`.
-- `auth.js`: login/logout, gestión de token, expiración, monitoreo de sesión y fallback `text/plain` para Apps Script.
+- `auth.js`: login/logout, gestión de token, expiración, monitoreo de sesión y uso del servicio `callBackend`.
 - `session-guard.js`: listeners de actividad, warnings antes de expirar y redirección al login.
 - `sidebar-component.js` + `sidebar.js`: render dinámico de la barra lateral, pin persistente y resaltado de ruta.
 - `ui.js`, `loader.js`: toasts, modales simples, loader blocking/inline con `showLoaderDuring`.
@@ -83,7 +83,7 @@ Cada carpeta clave tiene su README específico. Usa este listado para profundiza
 - `auth-system.js`, `login-page.js`: redirección post-login, validaciones y carrusel.
 
 ### 4.2 Páginas (`src/pages`)
-- `dashboard.html`: contenedores para KPIs, filtros y tabla (scripts en `pages_scripts/dashboard.js` → `avances/index.js`).
+- `dashboard.html`: contenedores para KPIs, filtros y tabla (scripts en `pages_scripts/dashboard.js` -> `avances/index.js`).
 - `login.html`: formulario + snippet opcional para override de `BASE_URL` en dev.
 - `actividades.html`: formulario extenso, panel de ortografía, distribución bimestral y tarjetas/modal.
 - `avance.html`: tabla de avances, filtros, resumen por actividad y modal.
@@ -128,7 +128,8 @@ Resumen de módulos (ver detalles en `apps_script/APPS_SCRIPT_README.md`):
 
 - `api/index.js` reenvía peticiones a Apps Script con la misma estructura `{ path, payload, usuario }`.
 - Compatible con Vercel (ver `vercel.json`).
-- `start-all.js`, `start-local.ps1`, `start-local.bat` ayudan a correr proxy + servidor estático local.
+- Usa `npm run start` (internamente `vercel dev`) para levantar frontend + proxy en local; `start-all.js` queda como opcion ligera solo para servir HTML sin backend.
+- El frontend usa `src/services/apiService.js` para enviar peticiones a `/api`; no hacer fetch directos a Apps Script desde el navegador.
 - Ajustar variables de entorno (URL de Apps Script, tokens) directamente en el proxy si se desea evitar exponerlos al cliente.
 
 ---
@@ -153,14 +154,14 @@ Resumen de módulos (ver detalles en `apps_script/APPS_SCRIPT_README.md`):
 - Recomendaciones generales:
 	- Centralizar tokens de color/tipografía en un archivo común.
 	- Asegurar contraste para badges y chips (cumplir WCAG).
-	- Documentar contratos CSS↔JS (clases que los scripts esperan).
+	- Documentar contratos CSS<->JS (clases que los scripts esperan).
 
 ---
 
 ## 9. Desarrollo local y despliegue
 
 ### 9.1 Prerrequisitos
-- Node.js ≥ 18 (para scripts y herramientas).
+- Node.js >= 18 (para scripts y herramientas).
 - Acceso al proyecto de Google Apps Script y Google Sheet configurada (`SYSTEM_CONFIG`).
 - Permisos para ejecutar el proxy (Vercel/Node local).
 
@@ -169,16 +170,15 @@ Resumen de módulos (ver detalles en `apps_script/APPS_SCRIPT_README.md`):
 # Instalar dependencias (si aplica)
 npm install
 
-# Iniciar proxy + servidor estático
-./start-local.ps1
+# Iniciar vercel dev (frontend + /api)
+npm run start
 
-# Alternativa manual
-npx http-server ./public -p 8000
-node start-all.js
+# Alternativa manual (puerto fijo)
+npx vercel dev --listen 3000
 ```
 
 ### 9.3 Configuración de ambiente
-- Definir `window.APP_CONFIG_OVERRIDE.BASE_URL` en `login.html` (solo dev) o usar `localStorage['USE_LOCAL_PROXY'] = 'true'` para forzar proxy local.
+- `vercel dev` expone la app en `http://localhost:3000`. Para forzar otro backend se puede usar `localStorage['USE_LOCAL_PROXY'] = 'true'` o definir `window.APP_CONFIG_OVERRIDE.BASE_URL` en `login.html`.
 - Apps Script: guardar `SPREADSHEET_ID` y `HMAC_SECRET` en Script Properties (`00_SharedUtils.gs`).
 - Proxy (`api/index.js`): sincronizar URLs y headers CORS con Apps Script.
 
@@ -190,9 +190,6 @@ node start-all.js
 ---
 
 ## 10. Calidad, validaciones y pruebas
-
-- **Validaciones frontend**: formularios de actividades y avances incluyen validaciones de campos obligatorios, límites numéricos y distribución bimestral (`validarDistribucionBimestres`).
-- **Validaciones backend**: `validateActivityData`, normalización de bimestres y checks en `08_AdvancesManager.gs`. Reforzar con validaciones de rol/token.
 - **Recomendaciones de testing** (tomadas de los READMEs):
 	- Unidades: `coincideAreaUsuario`, `convertirValoresFormulario`, `resolveBimestreLocal`, `parseNumericValue`, `evaluateAvancePerformance`.
 	- Integración: flujos de login con `Auth.login`, creación de actividades (mock fetch) y registro de avances (modal completo).
@@ -202,8 +199,6 @@ node start-all.js
 - **CHANGELOG**: registrar alteraciones relevantes en `CHANGELOG.md`.
 
 ---
-
-## 11. Operación, monitoreo y mantenimiento
 
 - Monitorizar tiempos de respuesta de Apps Script; dividir operaciones largas para evitar timeouts (6 minutos).
 - Revisar tamaño de hojas: `readSheetAsObjects` lee todo el dataset, lo que puede requerir paginación o filtros server-side a futuro.
@@ -221,84 +216,82 @@ node start-all.js
 
 ```
 PAI_V1/
-├─ api/
-│  └─ index.js
-├─ apps_script/
-│  ├─ 00_SharedUtils.gs
-│  ├─ 01_CatalogManager.gs
-│  ├─ 02_ActivityManager.gs
-│  ├─ 03_Backend.gs
-│  ├─ 04_DashboardManager.gs
-│  ├─ 05_Auth.gs
-│  ├─ 06_RoutingUtils.gs
-│  ├─ 07_LegacyHandlers.gs
-│  ├─ 08_AdvancesManager.gs
-│  └─ 09_BimestresManager.gs
-├─ apps_script/APPS_SCRIPT_README.md
-├─ public/
-│  ├─ index.html
-│  ├─ css/styles.css
-│  ├─ js/orthography.js
-│  ├─ vendor/typo.min.js
-│  └─ dict/
-│     ├─ es_ES.aff
-│     └─ es_ES.dic
-├─ public/PUBLIC_README.md
-├─ src/
-│  ├─ assets/
-│  ├─ lib/
-│  │  ├─ auth-system.js
-│  │  ├─ auth.js
-│  │  ├─ config.js
-│  │  ├─ loader.js
-│  │  ├─ login-page.js
-│  │  ├─ roles.js
-│  │  ├─ session-guard.js
-│  │  ├─ sidebar-component.js
-│  │  ├─ sidebar.js
-│  │  └─ ui.js
-│  ├─ lib/LIB_README.md
-│  ├─ pages/
-│  │  ├─ actividades.html
-│  │  ├─ admin.html
-│  │  ├─ avance.html
-│  │  ├─ dashboard.html
-│  │  └─ login.html
-│  ├─ pages/PAGES_README.md
-│  ├─ pages_scripts/
-│  │  ├─ actividades/
-│  │  │  ├─ ACTIVIDADES_README.md
-│  │  │  └─ manager/
-│  │  │     └─ ACTIVIDADES_MANAGER_README.md
-│  │  ├─ avances/
-│  │  │  └─ AVANCES_README.md
-│  │  ├─ admin/
-│  │  │  ├─ ADMIN_README.md
-│  │  │  └─ manager/
-│  │  │     └─ ADMIN_MANAGER_README.md
-│  │  └─ PAGES_SCRIPTS_README.md
-│  └─ styles/
-│     ├─ STYLES_README.md
-│     ├─ actividades.css
-│     ├─ avance.css
-│     ├─ dashboard.css
-│     ├─ layout.css
-│     ├─ loader.css
-│     ├─ login.css
-│     └─ sidebar.css
-├─ CHANGELOG.md
-├─ package.json
-├─ start-all.js
-├─ start-local.bat
-├─ start-local.ps1
-└─ vercel.json
+|-- api/
+|   \-- index.js
+|-- apps_script/
+|   |-- 00_SharedUtils.gs
+|   |-- 01_CatalogManager.gs
+|   |-- 02_ActivityManager.gs
+|   |-- 03_Backend.gs
+|   |-- 04_DashboardManager.gs
+|   |-- 05_Auth.gs
+|   |-- 06_RoutingUtils.gs
+|   |-- 07_LegacyHandlers.gs
+|   |-- 08_AdvancesManager.gs
+|   \-- 09_BimestresManager.gs
+|-- apps_script/APPS_SCRIPT_README.md
+|-- public/
+|   |-- index.html
+|   |-- css/styles.css
+|   |-- js/orthography.js
+|   |-- vendor/typo.min.js
+|   \-- dict/
+|       |-- es_ES.aff
+|       \-- es_ES.dic
+|-- public/PUBLIC_README.md
+|-- src/
+|   |-- assets/
+|   |-- lib/
+|   |   |-- auth-system.js
+|   |   |-- auth.js
+|   |   |-- config.js
+|   |   |-- loader.js
+|   |   |-- login-page.js
+|   |   |-- roles.js
+|   |   |-- session-guard.js
+|   |   |-- sidebar-component.js
+|   |   |-- sidebar.js
+|   |   \-- ui.js
+|   |-- lib/LIB_README.md
+|   |-- pages/
+|   |   |-- actividades.html
+|   |   |-- admin.html
+|   |   |-- avance.html
+|   |   |-- dashboard.html
+|   |   \-- login.html
+|   |-- pages/PAGES_README.md
+|   |-- pages_scripts/
+|   |   |-- actividades/
+|   |   |   |-- ACTIVIDADES_README.md
+|   |   |   \-- manager/
+|   |   |       \-- ACTIVIDADES_MANAGER_README.md
+|   |   |-- avances/
+|   |   |   \-- AVANCES_README.md
+|   |   |-- admin/
+|   |   |   |-- ADMIN_README.md
+|   |   |   \-- manager/
+|   |   |       \-- ADMIN_MANAGER_README.md
+|   |   \-- PAGES_SCRIPTS_README.md
+|   \-- styles/
+|       |-- STYLES_README.md
+|       |-- actividades.css
+|       |-- avance.css
+|       |-- dashboard.css
+|       |-- layout.css
+|       |-- loader.css
+|       |-- login.css
+|       \-- sidebar.css
+|-- CHANGELOG.md
+|-- package.json
+|-- start-all.js
+\-- vercel.json
 ```
 
 ---
 
 ## 13. Contacto, licencia y créditos
 
-- **Contacto técnico**: Manolo Rey Garcia — manolo.rey@gestiondelriesgo.gov.co / manolorey18@gmail.com
+- **Contacto técnico**: Manolo Rey Garcia - manolo.rey@gestiondelriesgo.gov.co / manolorey18@gmail.com
 - **Autoría de documentación**: todos los archivos dentro del repositorio (incluido este) fueron creados por Manolo Rey Garcia.
 
 

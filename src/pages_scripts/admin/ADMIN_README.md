@@ -1,4 +1,4 @@
-# Documentación — src/pages_scripts/admin
+# Documentación - src/pages_scripts/admin
 
 Este documento describe los archivos que se encuentran directamente dentro de la carpeta `src/pages_scripts/admin` (no incluye subcarpetas). Para cada archivo se indica propósito, API pública (exports), elementos DOM que consume o modifica, ejemplos de uso y recomendaciones prácticas. Al final se presentan observaciones generales y propuestas de mejora.
 
@@ -55,16 +55,15 @@ Propósito
 - Cliente HTTP específico para las operaciones del panel de administración: gestión de catálogos y usuarios (y podría ampliarse a actividades/avances si se requiere). Implementa caching por catálogo y wrappers CRUD.
 
 Clase y exports
-- `ApiService` — clase con una única instancia exportada por defecto (`apiService`).
+- `ApiService`: clase con una única instancia exportada por defecto (`apiService`).
 
 API pública (métodos principales)
-- `callBackend(endpoint, payload = {}, options = {})` — capa general que arma el payload (incluye path y usuario) y hace POST al `resolveScriptUrl()` con Content-Type condicionado por `shouldUseTextPlain`.
+- `callBackend(endpoint, payload = {}, options = {})`: capa general que arma el payload (incluye `path` y `usuario`), muestra/oculta loaders y delega en `callBackend` de `src/services/apiService.js` para hablar con `/api`.
 - Catálogos: `fetchCatalogo(catalogo, options)`, `createCatalogItem(data)`, `updateCatalogItem(id, data)`, `deleteCatalogItem(id)`, `clearCatalogCache(catalogo)`.
 - Usuarios: `fetchUsuarios()`, `createUsuario({email,password,role,area})`, `updateUsuario({email,role,area,password})`, `deleteUsuario(email)`.
 
 Detalles importantes
-- `backendUrl` se resuelve con `resolveScriptUrl()` (importado desde `actividades/config.js`).
-- `callBackend` muestra y oculta loaders si `window.showLoader/hideLoader` existen y lanza errores en caso de respuestas no ok o `result.error`.
+- `callBackend` añade `usuario` al payload si no existe, muestra/oculta loaders cuando están disponibles y lanza errores en caso de respuestas no ok o `result.error`.
 - `fetchCatalogo` valida `catalogo` y cachea resultados en `this.catalogosCache`.
 
 Ejemplos de uso

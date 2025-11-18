@@ -2,22 +2,17 @@
  * api.js - Servicios de comunicación con el backend para actividades
  */
 
-import { shouldUseTextPlain, resolveScriptUrl } from './config.js';
 import { obtenerEmailUsuarioActual } from './utils.js';
+import { callBackend as callApi } from '../../services/apiService.js';
 
 /**
  * Clase para manejar la comunicación con el backend
  */
 class ApiService {
   constructor() {
-    // Inicializar con valores por defecto
-    this.backendUrl = null; // Se inicializará en la primera llamada
     this.actividadesCache = [];
     this.avancesCache = [];
     this.catalogosCache = {};
-    
-    // Ya no se usa la detección de entorno local - siempre se conecta al backend real
-    console.log('[INFO] ApiService inicializado');
   }
   
   // Mock data removed
@@ -30,153 +25,40 @@ class ApiService {
    * @returns {Promise<Object>} Respuesta del servidor
    */
   async callBackend(endpoint, payload = {}, options = {}) {
-    console.log('[DEBUG] callBackend recibió endpoint:', endpoint, 'tipo:', typeof endpoint);
-    
-    const { loaderMessage = 'Cargando...', noCredentials = false } = options;
-    
-    // Validar que endpoint sea un valor válido usando una lógica más estricta y con más debug
-    if (!endpoint) {
-      console.error('[ERROR] callBackend recibió un endpoint inválido:', endpoint);
+    const { loaderMessage = 'Cargando...' } = options;
+
+    const sanitizedEndpoint = typeof endpoint === 'string' ? endpoint.trim() : '';
+    if (!sanitizedEndpoint) {
       throw new Error('Campo path requerido');
     }
-    
-    // Endpoint es una string pero necesitamos asegurarnos que realmente tenga contenido
-    if (typeof endpoint !== 'string') {
-      console.warn('[WARN] callBackend recibió un endpoint que no es string:', endpoint, 'intentando convertir');
-      endpoint = String(endpoint);
-    }
-    
-    // Después de las validaciones y conversiones, verificar nuevamente
-    if (!endpoint || endpoint.trim() === '') {
-      console.error('[ERROR] Después de validación, endpoint sigue siendo inválido');
-      throw new Error('Campo path requerido (después de validación)');
-    }
-    
-    // Asegurarse que el endpoint no tenga espacios al inicio o final
-    endpoint = endpoint.trim();
-    
-    // Inicializar backendUrl si no se ha hecho aún
-    if (!this.backendUrl) {
-      console.log('[INFO] Inicializando backendUrl');
-      
-      try {
-        // Usar la función resolveScriptUrl para obtener la URL del backend
-        this.backendUrl = resolveScriptUrl();
-        console.log('[INFO] backendUrl inicializada desde resolveScriptUrl:', this.backendUrl);
-      } catch (error) {
-        console.error('[ERROR] Error resolviendo URL del backend:', error);
 
-        // Si falla, usar el valor predeterminado
-  this.backendUrl = 'https://script.google.com/macros/s/AKfycbxgt5fpDd1PDjSd6MQyAij2fUNUFigDVDLf2jCfwq8e9sPBC1hhxQxzDgdKKGasdtixRg/exec';
-
-        console.warn('[WARN] Usando URL de backend por defecto:', this.backendUrl);
-      }
+    const basePayload = payload && typeof payload === 'object' ? { ...payload } : {};
+    if (!basePayload.usuario) {
+      basePayload.usuario = obtenerEmailUsuarioActual();
     }
-    
+
+    const requestBody = {
+      payload: basePayload,
+      usuario: basePayload.usuario,
+      ...basePayload
+    };
+
     try {
-      // Mostrar loader si está disponible
       if (typeof window !== 'undefined' && window.showLoader && loaderMessage) {
         window.showLoader(loaderMessage);
       }
-      
-      // Verificar que backendUrl está definida
-      if (!this.backendUrl) {
-        this.backendUrl = resolveScriptUrl();
-        console.log('[INFO] backendUrl inicializada en preparación de URL:', this.backendUrl);
-      }
-      
-      // Preparar la URL - Para mayor compatibilidad, incluimos el path tanto en la URL como en el payload
-      // Esto garantiza que funcione con diferentes versiones del backend
-      const url = this.backendUrl;
-      
-      // Opcionalmente se puede incluir en URL, pero ahora lo principal es enviarlo en el payload
-      // const url = this.backendUrl.includes('?') 
-      //   ? `${this.backendUrl}&path=${endpoint}`
-      //   : `${this.backendUrl}?path=${endpoint}`;
-        
-      console.log('[DEBUG] URL preparada para fetch:', url);
-      
-      // Preparar los headers
-      const headers = {
-        'Content-Type': shouldUseTextPlain(url) ? 'text/plain' : 'application/json',
-      };
-      
-      // Preparar payload estructurado para el backend (path + payload anidado)
-      const requestPayload = payload && typeof payload === 'object' ? { ...payload } : {};
-      const usuarioActual = requestPayload.usuario || obtenerEmailUsuarioActual();
 
-      if (!requestPayload.usuario) {
-        requestPayload.usuario = usuarioActual;
-      }
+      const result = await callApi(sanitizedEndpoint, requestBody);
 
-      const data = {
-        path: endpoint,
-        payload: requestPayload,
-        usuario: usuarioActual,
-        ...requestPayload
-      };
-      
-      console.log('[DEBUG] Payload preparado para endpoint:', endpoint);
-      
-      console.log('[DEBUG] Datos a enviar:', data);
-      
-      // Configurar las opciones de fetch
-      const fetchOptions = {
-        method: 'POST',
-        headers,
-        body: shouldUseTextPlain(url) ? JSON.stringify(data) : JSON.stringify(data),
-        cache: 'no-store',
-        credentials: 'omit' // Cambiamos para evitar problemas de CORS en entorno de desarrollo local
-      };
-      
-      // Ejecutar la solicitud
-      console.log('[DEBUG] Enviando fetch a:', url);
-      const response = await fetch(url, fetchOptions);
-      
-      if (!response.ok) {
-        console.error('[ERROR] Respuesta HTTP no OK:', response.status, response.statusText);
-        const errorText = await response.text();
-        console.error('[ERROR] Contenido de error:', errorText);
-        throw new Error(`Error HTTP: ${response.status} ${response.statusText}`);
-      }
-      
-      const result = await response.json();
-      console.log('[DEBUG] Respuesta recibida:', result);
-      
-      // Validar la respuesta
       if (result && result.error) {
         throw new Error(result.error);
       }
-      
+
       return result;
     } catch (error) {
-      console.error(`[ERROR] Error en callBackend(${endpoint}):`, error);
-
-      // Intento de fallback automático para entornos de desarrollo locales donde
-      // la llamada directa al Apps Script puede fallar por CORS. Si detectamos
-      // que la URL apunta a script.google.com, hacemos un segundo intento hacia
-      // un proxy local en la misma raíz: /api (por ejemplo, con `vercel dev`).
-      try {
-        if (typeof window !== 'undefined' && url && url.includes('script.google.com')) {
-          const fallbackUrl = window.location.origin + '/api';
-          console.warn('[WARN] Intentando fallback a proxy local en:', fallbackUrl);
-          const fallbackOptions = { ...fetchOptions, headers: { ...fetchOptions.headers, 'Content-Type': 'application/json' } };
-          const fallbackResp = await fetch(fallbackUrl, fallbackOptions);
-          if (fallbackResp.ok) {
-            const fallbackResult = await fallbackResp.json();
-            console.log('[INFO] Fallback a /api exitoso, resultado:', fallbackResult);
-            return fallbackResult;
-          } else {
-            console.warn('[WARN] Fallback a /api devolvió estado:', fallbackResp.status);
-          }
-        }
-      } catch (fbErr) {
-        console.warn('[WARN] Fallback a /api falló:', fbErr);
-      }
-
+      console.error(`[ERROR] Error en callBackend(${sanitizedEndpoint}):`, error);
       throw error;
     } finally {
-      // Ocultar loader si está disponible
       if (typeof window !== 'undefined' && window.hideLoader) {
         window.hideLoader();
       }
@@ -189,18 +71,9 @@ class ApiService {
    */
   async fetchActividades(options = {}) {
     try {
-      console.log('[INFO] Iniciando fetchActividades con backendUrl:', this.backendUrl);
-      
       // Asegurarnos de que endpoint sea una string literal fija
       const endpoint = "actividades/obtener";
       console.log('[DEBUG] fetchActividades llamando a callBackend con endpoint:', endpoint);
-      
-      // Forzar inicialización de backendUrl si aún no está inicializada
-      if (!this.backendUrl) {
-        this.backendUrl = resolveScriptUrl();
-        console.log('[INFO] backendUrl inicializada en fetchActividades:', this.backendUrl);
-      }
-      
       const { loaderMessage = 'Cargando actividades...', filters = null } = options;
       const payload = filters ? { filters } : {};
       const result = await this.callBackend(endpoint, payload, { loaderMessage });
@@ -257,9 +130,7 @@ class ApiService {
       
       // Usamos el endpoint correcto según el backend: 'getCatalogos'
       const { loaderMessage = 'Cargando catálogos...' } = options;
-      const result = await this.callBackend('getCatalogos', {
-        path: 'getCatalogos' // Asegurarnos de que el path esté en el payload también
-      }, { loaderMessage });
+      const result = await this.callBackend('getCatalogos', {}, { loaderMessage });
       
       // La respuesta tiene estructura: {success, data: {areas: [], subprocesos: [], ...}, message, errors, meta}
       // Necesitamos extraer el objeto data que contiene todos los catálogos

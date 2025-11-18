@@ -48,7 +48,7 @@ async function main() {
     
     // Nota: no se inyecta automáticamente la configuración de la API en los archivos HTML
     // para evitar sobrescribir configuraciones de producción. Configure la URL del backend
-    // mediante variables de entorno en el despliegue (ej. Vercel) o mediante start-local scripts
+    // mediante variables de entorno en el despliegue (ej. Vercel) o usando `vercel dev`
     // cuando sea estrictamente necesario para desarrollo.
 
     // This simplified starter only launches a static server for preview.

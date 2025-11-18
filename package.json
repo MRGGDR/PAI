@@ -4,13 +4,12 @@
   "description": "Sistema de recopilación de datos para el PAI 2025",
   "private": true,
   "scripts": {
-    "dev": "npx http-server src -c-1 -p 3000",
-    "start": "npx http-server src -c-1 -p 8080",
-    "build": "echo 'Static HTML - no build step needed'",
-  "changelog": "conventional-changelog -p conventionalcommits -i CHANGELOG.md -s -r 0",
-  "docs:dev": "vitepress dev docs",
-  "docs:build": "vitepress build docs",
-  "docs:preview": "vitepress preview docs"
+    "start": "vercel dev --listen 3000",
+    "build": "echo Static HTML - no build step needed",
+    "changelog": "conventional-changelog -p conventionalcommits -i CHANGELOG.md -s -r 0",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "keywords": [
     "login",
@@ -22,11 +21,11 @@
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.0.0",
-  "conventional-changelog-cli": "^2.2.2",
+    "conventional-changelog-cli": "^2.2.2",
     "cross-env": "^7.0.3",
-  "http-server": "^14.1.1",
-  "markdown-it-include": "^2.0.0",
-  "vitepress": "^1.6.4"
+    "markdown-it-include": "^2.0.0",
+    "vercel": "^39.0.0",
+    "vitepress": "^1.6.4"
   },
   "dependencies": {
     "hunspell-dict-es-es": "^0.1.0",

@@ -1,41 +1,50 @@
-function initPlanMultiSelect() {
-  const select = document.getElementById('plan_id');
-  const container = document.querySelector('[data-multiselect="plan"]');
+function initCatalogMultiSelect(config) {
+  const select = document.getElementById(config.selectId);
+  const container = document.querySelector(`[data-multiselect="${config.containerAttr}"]`);
   if (!select || !container) return;
 
   select.multiple = true;
   select.classList.add('modern-multiselect__native');
   select.dataset.skipEnhance = 'true';
 
-  const state = this.components.multiSelectPlanes || {};
+  const state = this.components[config.stateKey] || {};
   state.select = select;
   state.container = container;
   state.trigger = container.querySelector('[data-multiselect-trigger]');
   state.dropdown = container.querySelector('[data-multiselect-dropdown]');
-  state.list = container.querySelector('#plan-multiselect-list');
-  state.searchInput = container.querySelector('#plan-multiselect-search');
-  state.labelEl = container.querySelector('#plan-multiselect-label');
-  state.countEl = container.querySelector('#plan-multiselect-count');
-  state.emptyEl = container.querySelector('#plan-multiselect-empty');
-  state.clearBtn = container.querySelector('#plan-multiselect-clear');
-  state.closeBtn = container.querySelector('#plan-multiselect-close');
-  state.placeholder = container.dataset.placeholder || 'Seleccionar planes...';
+  state.list = container.querySelector('[data-multiselect-list]');
+  state.searchInput = container.querySelector('[data-multiselect-search]');
+  state.labelEl = container.querySelector('[data-multiselect-label]');
+  state.countEl = container.querySelector('[data-multiselect-count]');
+  state.emptyEl = container.querySelector('[data-multiselect-empty]');
+  state.clearBtn = container.querySelector('[data-multiselect-clear]');
+  state.closeBtn = container.querySelector('[data-multiselect-close]');
+  state.placeholder = container.dataset.placeholder || config.placeholder || 'Seleccionar...';
   state.open = false;
+
+  const summaryFormatter = typeof config.summaryFormatter === 'function'
+    ? config.summaryFormatter
+    : (items, placeholder) => {
+        if (!items.length) return placeholder;
+        if (items.length <= 2) {
+          return items.map(opt => opt.textContent).join(', ');
+        }
+        return `${items.length} seleccionados`;
+      };
+
+  const countFormatter = typeof config.countFormatter === 'function'
+    ? config.countFormatter
+    : (count) => `${count}`;
 
   const updateSummary = () => {
     if (!state.labelEl) return;
     const seleccionados = [...select.options].filter(opt => opt.value !== '' && opt.selected);
-    if (!seleccionados.length) {
-      state.labelEl.textContent = state.placeholder;
-    } else if (seleccionados.length <= 2) {
-      state.labelEl.textContent = seleccionados.map(opt => opt.textContent).join(', ');
-    } else {
-      state.labelEl.textContent = `${seleccionados.length} planes seleccionados`;
-    }
+    const labelText = summaryFormatter(seleccionados, state.placeholder, config) || state.placeholder;
+    state.labelEl.textContent = labelText;
 
     if (state.countEl) {
       if (seleccionados.length) {
-        state.countEl.textContent = `${seleccionados.length}`;
+        state.countEl.textContent = countFormatter(seleccionados.length, config);
         state.countEl.classList.remove('hidden');
       } else {
         state.countEl.classList.add('hidden');
@@ -79,7 +88,7 @@ function initPlanMultiSelect() {
       const label = document.createElement('label');
       label.className = 'modern-multiselect__option';
       label.dataset.value = option.value;
-      label.dataset.search = option.textContent.toLowerCase();
+      label.dataset.search = (option.textContent || '').toLowerCase();
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -155,11 +164,7 @@ function initPlanMultiSelect() {
     });
 
     state.trigger?.addEventListener('click', () => {
-      if (state.open) {
-        closeDropdown();
-      } else {
-        openDropdown();
-      }
+      state.open ? closeDropdown() : openDropdown();
     });
 
     state.clearBtn?.addEventListener('click', () => {
@@ -191,20 +196,62 @@ function initPlanMultiSelect() {
 
   buildOptions();
 
-  this.components.multiSelectPlanes = state;
+  this.components[config.stateKey] = state;
+}
+
+function refreshCatalogMultiSelect(stateKey) {
+  const state = this.components[stateKey];
+  if (!state) return;
+  if (typeof state.buildOptions === 'function') {
+    state.buildOptions();
+  } else if (typeof state.syncFromNative === 'function') {
+    state.syncFromNative();
+  }
+}
+
+function initPlanMultiSelect() {
+  initCatalogMultiSelect.call(this, {
+    stateKey: 'multiSelectPlanes',
+    selectId: 'plan_id',
+    containerAttr: 'plan',
+    placeholder: 'Seleccionar planes...',
+    summaryFormatter: (items, placeholder) => {
+      if (!items.length) return placeholder;
+      if (items.length <= 2) {
+        return items.map(opt => opt.textContent).join(', ');
+      }
+      return `${items.length} planes seleccionados`;
+    }
+  });
 }
 
 function refreshPlanMultiSelect() {
-  const { multiSelectPlanes } = this.components;
-  if (!multiSelectPlanes) return;
-  if (typeof multiSelectPlanes.buildOptions === 'function') {
-    multiSelectPlanes.buildOptions();
-  } else if (typeof multiSelectPlanes.syncFromNative === 'function') {
-    multiSelectPlanes.syncFromNative();
-  }
+  refreshCatalogMultiSelect.call(this, 'multiSelectPlanes');
+}
+
+function initFuenteMultiSelect() {
+  initCatalogMultiSelect.call(this, {
+    stateKey: 'multiSelectFuentes',
+    selectId: 'fuente_financiacion',
+    containerAttr: 'fuente',
+    placeholder: 'Seleccionar fuentes...',
+    summaryFormatter: (items, placeholder) => {
+      if (!items.length) return placeholder;
+      if (items.length <= 3) {
+        return items.map(opt => opt.textContent).join(', ');
+      }
+      return `${items.length} fuentes seleccionadas`;
+    }
+  });
+}
+
+function refreshFuenteMultiSelect() {
+  refreshCatalogMultiSelect.call(this, 'multiSelectFuentes');
 }
 
 export const multiSelectMethods = {
   initPlanMultiSelect,
-  refreshPlanMultiSelect
+  refreshPlanMultiSelect,
+  initFuenteMultiSelect,
+  refreshFuenteMultiSelect
 };

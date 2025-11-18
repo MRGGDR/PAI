@@ -21,26 +21,29 @@ module.exports = async (req, res) => {
     // Parse body: prefer req.body (if parsed by platform), otherwise read raw body
     let payload;
     if (req.body && Object.keys(req.body).length) {
-      payload = req.body;
+      payload = typeof req.body === 'string' ? safeJsonParse(req.body) : req.body;
     } else {
       payload = await getRawBody(req);
     }
 
-    // Validate payload
+    // Validate payload (frontend must send at least { path: '...' })
     if (!payload || typeof payload !== 'object' || !payload.path) {
       res.statusCode = 400;
       res.setHeader('Content-Type', 'application/json');
       return res.end(JSON.stringify({ success: false, error: 'Request body must be JSON and include a "path" property' }));
     }
 
-    // Usar la variable de entorno APPS_SCRIPT_URL o un valor predeterminado de config.js
-  const defaultUrl = 'https://script.google.com/macros/s/AKfycbxgt5fpDd1PDjSd6MQyAij2fUNUFigDVDLf2jCfwq8e9sPBC1hhxQxzDgdKKGasdtixRg/exec';
-    const target = process.env.APPS_SCRIPT_URL || defaultUrl;
+    // Usar la variable de entorno APPS_SCRIPT_URL (o alias VERCEL_APPS_SCRIPT_URL) para resolver el backend real
+    const target = (process.env.APPS_SCRIPT_URL || process.env.VERCEL_APPS_SCRIPT_URL || '').trim();
     
     if (!target) {
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ success: false, error: 'APPS_SCRIPT_URL not configured in environment' }));
+      return res.end(JSON.stringify({
+        success: false,
+        error: 'APPS_SCRIPT_URL not configured in environment',
+        hint: 'Define APPS_SCRIPT_URL (por ejemplo en .env.local) para apuntar al Apps Script o backend real.'
+      }));
     }
 
     // Forward to target (server-to-server)
@@ -78,7 +81,7 @@ function getRawBody(req) {
     req.on('data', chunk => data += chunk);
     req.on('end', () => {
       try {
-        resolve(data ? JSON.parse(data) : {});
+        resolve(data ? safeJsonParse(data) : {});
       } catch (e) {
         // If parsing fails, resolve raw text
         resolve(data);
@@ -86,6 +89,15 @@ function getRawBody(req) {
     });
     req.on('error', reject);
   });
+}
+
+function safeJsonParse(value) {
+  if (!value) return {};
+  try {
+    return JSON.parse(value);
+  } catch (err) {
+    return value;
+  }
 }
 
 

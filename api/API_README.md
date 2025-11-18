@@ -12,7 +12,7 @@ La carpeta `api` contiene una función CommonJS diseñada para ejecutarse como f
 
 ## Archivo principal
 
-- `index.js` — función serverless. Comportamiento clave:
+- `index.js`: función serverless. Comportamiento clave:
   - Añade cabeceras CORS: `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET,POST,OPTIONS`, `Access-Control-Allow-Headers: Content-Type,Authorization`.
   - Responde `OPTIONS` con 204 para preflight CORS.
   - Lee el body: intenta `req.body` (si el runtime lo parseó) o lee el body crudo con `getRawBody`.
@@ -21,7 +21,7 @@ La carpeta `api` contiene una función CommonJS diseñada para ejecutarse como f
   - Reenvía la petición al target con `fetch(target, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })`.
   - Intenta parsear la respuesta del target como JSON; si falla, devuelve un wrapper JSON con `success`, `status` y `body` (texto bruto).
 
-## Contrato (mini-contrato) — entradas/salidas, errores
+## Contrato (mini-contrato) - entradas/salidas, errores
 
 - Inputs esperados:
   - Método HTTP: `POST` (se admite `OPTIONS` para CORS preflight).
@@ -50,9 +50,13 @@ La carpeta `api` contiene una función CommonJS diseñada para ejecutarse como f
   - 400: cuerpo inválido o falta `path`.
   - 500: error interno, falta de `APPS_SCRIPT_URL` configurada y no hay `defaultUrl`, o excepción durante fetch.
 
+## Uso desde el frontend
+
+- El frontend nunca debe llamar directamente al Apps Script. Todas las peticiones deben pasar por `/api` usando `callBackend(path, payload)` del archivo `src/services/apiService.js`.
+
 ## Variables de entorno
 
-- `APPS_SCRIPT_URL` — URL completa del Apps Script (u otro servicio HTTP) que procesa las peticiones. Si no está definida, `index.js` usa un `defaultUrl` embebido. En producción configure `APPS_SCRIPT_URL` en el entorno de despliegue (Vercel, Netlify, etc.).
+- `APPS_SCRIPT_URL`: URL completa del Apps Script (u otro servicio HTTP) que procesa las peticiones. Si no está definida, `index.js` usa un `defaultUrl` embebido. En producción configure `APPS_SCRIPT_URL` en el entorno de despliegue (Vercel, Netlify, etc.).
 
 ## Ejemplos de payloads y uso
 
@@ -131,8 +135,8 @@ vercel dev
 
 ## Estructura de la carpeta `api`
 
-- `index.js` — función principal (ver arriba).
-- (otros archivos no presentes por defecto) — mantener la carpeta pequeña: si añadimos middlewares o tests, documentar cada archivo aquí.
+- `index.js`: función principal (ver arriba).
+- (otros archivos no presentes por defecto): mantener la carpeta pequeña; si añadimos middlewares o tests, documentar cada archivo aquí.
 
 ## Casos límite y consideraciones técnicas
 

@@ -3,9 +3,8 @@
  * Determina que endpoint debe usar el frontend para llegar al backend real.
  * Prioridad de resolucion:
  * 1. window.APP_CONFIG_OVERRIDE.BASE_URL (permite inyectar overrides en runtime)
- * 2. En hosts locales/privados se usa, por defecto, el Apps Script desplegado
- *    a menos que el desarrollador pida explicitamente el proxy local
- * 3. En otros entornos (ej. Vercel) se usa '/api' para aprovechar la funcion serverless
+ * 2. En hosts locales/privados se puede optar por un proxy local apuntando a /api
+ * 3. En otros entornos se usa '/api' (servidor serverless) como puerta de enlace única
  */
 
 const LOCAL_PROXY_FLAG_KEY = 'USE_LOCAL_PROXY';
@@ -17,11 +16,10 @@ const _fromWindow = (typeof window !== 'undefined'
   ? window.APP_CONFIG_OVERRIDE.BASE_URL
   : '';
 
-/** URL del Apps Script desplegado (backend real) */
-export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgt5fpDd1PDjSd6MQyAij2fUNUFigDVDLf2jCfwq8e9sPBC1hhxQxzDgdKKGasdtixRg/exec';
-
 /** URL del proxy local opcional */
 export const LOCAL_PROXY_URL = 'http://localhost:3000/api';
+
+const DEFAULT_API_URL = '/api';
 
 function isLocalHost() {
   try {
@@ -50,9 +48,9 @@ let resolvedBase = _fromWindow;
 
 if (!resolvedBase) {
   if (isLocalHost()) {
-    resolvedBase = readLocalProxyFlag() ? LOCAL_PROXY_URL : APPS_SCRIPT_URL;
+    resolvedBase = readLocalProxyFlag() ? LOCAL_PROXY_URL : DEFAULT_API_URL;
   } else {
-    resolvedBase = '/api';
+    resolvedBase = DEFAULT_API_URL;
   }
 }
 
@@ -61,7 +59,7 @@ if (!resolvedBase) {
  */
 export const APP_CONFIG = {
   BASE_URL: resolvedBase,
-  APPS_SCRIPT_URL,
+  API_URL: resolvedBase,
   LOCAL_PROXY_URL,
   LOCAL_PROXY_FLAG_KEY,
   LOGIN_TIMEOUT_MS: 15000
@@ -78,7 +76,6 @@ if (typeof window !== 'undefined') {
 export async function getConfig() {
   return {
     SCRIPT_URL: APP_CONFIG.BASE_URL,
-    APPS_SCRIPT_URL,
     LOCAL_PROXY_URL,
     LOGIN_TIMEOUT_MS: APP_CONFIG.LOGIN_TIMEOUT_MS
   };

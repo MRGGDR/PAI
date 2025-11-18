@@ -85,7 +85,7 @@ npm run changelog
 
 ### Added
 - Estructura inicial del repositorio: carpetas `src/`, `public/`, `apps_script/`, `api/` y páginas base (`login.html`, `dashboard.html`, `actividades.html`, `avance.html`, `admin.html`).
-- `package.json` mínimo y scripts de apoyo (`start-local.ps1`, `start-local.bat`, `start-all.js`) para servir la SPA y trabajar con un proxy local.
+- `package.json` mínimo y scripts de apoyo (`npm run start` via `vercel dev`, `start-all.js`) para servir la SPA y trabajar con un proxy local.
 
 ### Notes
 - Punto de partida del proyecto; aún no se conectaba a fuentes de datos reales.

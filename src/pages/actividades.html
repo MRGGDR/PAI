@@ -334,7 +334,6 @@
         <div class="mt-2 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 space-y-1">
           <p class="font-semibold text-slate-800">Ejemplos rápidos:</p>
           <ul class="list-disc pl-4 space-y-1">
-            <li>Porcentaje de municipios con planes actualizados frente a emergencias, medido semestralmente.</li>
             <li>Número de simulacros comunitarios realizados en zonas de alta exposición durante el primer semestre.</li>
           </ul>
           <p class="text-slate-500">Evita indicadores vagos o sin unidad de medida (ej. "acciones formuladas" sin cantidad).</p>
@@ -617,17 +616,39 @@
       </div>
     </div>
 
-    <!-- Fuente -->
+    <!-- Fuentes -->
     <div>
       <label class="block text-sm font-medium text-[var(--text-secondary)] mb-2">
-        Fuente de Financiamiento
+        Fuentes de Financiamiento
       </label>
+      <div class="modern-multiselect" data-multiselect="fuente" data-placeholder="Seleccionar fuentes...">
+        <button type="button" class="modern-multiselect__trigger" data-multiselect-trigger id="fuente-multiselect-trigger">
+          <span class="modern-multiselect__label" data-multiselect-label id="fuente-multiselect-label">Seleccionar fuentes...</span>
+          <span class="modern-multiselect__badge hidden" data-multiselect-count id="fuente-multiselect-count">0</span>
+          <span class="material-symbols-outlined modern-multiselect__chevron">expand_more</span>
+        </button>
+        <div class="modern-multiselect__dropdown hidden" data-multiselect-dropdown id="fuente-multiselect-dropdown">
+          <div class="modern-multiselect__search">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" class="modern-multiselect__search-input" data-multiselect-search id="fuente-multiselect-search" placeholder="Buscar fuente..." autocomplete="off" />
+          </div>
+          <div class="modern-multiselect__list" data-multiselect-list id="fuente-multiselect-list"></div>
+          <div class="modern-multiselect__empty hidden" data-multiselect-empty id="fuente-multiselect-empty">No hay fuentes que coincidan con tu búsqueda.</div>
+          <div class="modern-multiselect__footer">
+            <button type="button" class="modern-multiselect__link" data-multiselect-clear id="fuente-multiselect-clear">Limpiar</button>
+            <button type="button" class="modern-multiselect__btn" data-multiselect-close id="fuente-multiselect-close">Listo</button>
+          </div>
+        </div>
+      </div>
       <select 
         id="fuente_financiacion" 
         name="fuente"
-        class="modern-select block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
-        <option value="">Seleccionar fuente...</option>
+        multiple
+        class="modern-multiselect__native"
+        data-skip-enhance="true">
+        <option value="">Seleccionar fuentes...</option>
       </select>
+      <p class="mt-1 text-xs text-[var(--text-secondary)]">Selecciona una o varias fuentes; se guardarán separadas por comas.</p>
     </div>
 
     <!-- Plan -->
@@ -637,20 +658,20 @@
       </label>
       <div class="modern-multiselect" data-multiselect="plan" data-placeholder="Seleccionar planes...">
         <button type="button" class="modern-multiselect__trigger" data-multiselect-trigger id="plan-multiselect-trigger">
-          <span class="modern-multiselect__label" id="plan-multiselect-label">Seleccionar planes...</span>
-          <span class="modern-multiselect__badge hidden" id="plan-multiselect-count">0</span>
+          <span class="modern-multiselect__label" data-multiselect-label id="plan-multiselect-label">Seleccionar planes...</span>
+          <span class="modern-multiselect__badge hidden" data-multiselect-count id="plan-multiselect-count">0</span>
           <span class="material-symbols-outlined modern-multiselect__chevron">expand_more</span>
         </button>
         <div class="modern-multiselect__dropdown hidden" data-multiselect-dropdown id="plan-multiselect-dropdown">
           <div class="modern-multiselect__search">
             <span class="material-symbols-outlined">search</span>
-            <input type="text" class="modern-multiselect__search-input" id="plan-multiselect-search" placeholder="Buscar plan..." autocomplete="off" />
+            <input type="text" class="modern-multiselect__search-input" data-multiselect-search id="plan-multiselect-search" placeholder="Buscar plan..." autocomplete="off" />
           </div>
-          <div class="modern-multiselect__list" id="plan-multiselect-list"></div>
-          <div class="modern-multiselect__empty hidden" id="plan-multiselect-empty">No hay planes que coincidan con tu búsqueda.</div>
+          <div class="modern-multiselect__list" data-multiselect-list id="plan-multiselect-list"></div>
+          <div class="modern-multiselect__empty hidden" data-multiselect-empty id="plan-multiselect-empty">No hay planes que coincidan con tu búsqueda.</div>
           <div class="modern-multiselect__footer">
-            <button type="button" class="modern-multiselect__link" id="plan-multiselect-clear">Limpiar</button>
-            <button type="button" class="modern-multiselect__btn" id="plan-multiselect-close">Listo</button>
+            <button type="button" class="modern-multiselect__link" data-multiselect-clear id="plan-multiselect-clear">Limpiar</button>
+            <button type="button" class="modern-multiselect__btn" data-multiselect-close id="plan-multiselect-close">Listo</button>
           </div>
         </div>
       </div>

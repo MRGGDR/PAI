@@ -1,4 +1,4 @@
-# Documentación — src/pages_scripts/actividades
+# Documentación - src/pages_scripts/actividades
 
 Este documento describe los archivos que se encuentran directamente dentro de la carpeta `src/pages_scripts/actividades` (no incluye subcarpetas). Para cada archivo se indica su propósito, API pública (funciones/clases exportadas), elementos del DOM que consume o modifica, ejemplos de uso y recomendaciones específicas detectadas en el código.
 
@@ -21,21 +21,21 @@ Propósito
 - Utilidades compartidas entre los módulos de `actividades`: extracción de datos del localStorage (email/rol/área), serialización de formularios, conversión de tipos, helpers para coincidencia de áreas y wrappers de UI (toast).
 
 API pública (exports)
-- `normalizarRol`, `obtenerPermisosRol`, `tienePermiso`, `esRolAdministrador`, `esRolContribuidor`, `esRolVisualizador` — reexporta funciones desde `src/lib/roles.js`.
-- `obtenerEmailUsuarioActual()` — devuelve email desde localStorage o token (base64) con varios fallbacks.
-- `serializarFormulario(formulario)` — convierte FormData en objeto (maneja campos repetidos como arrays).
-- `mostrarToast(mensaje, tipo, opciones)` — wrapper que intenta usar `toast` de `lib/ui.js` y falla sobre `alert` si no disponible.
-- `formatearFecha(fecha)` — formatea a locale `es-CO`.
-- `convertirValoresFormulario(valores, esquema)` — convierte tipos (fecha, numero, boolean) según esquema.
-- `obtenerRolUsuarioActual()`, `obtenerRolUsuarioNormalizado()`, `obtenerAreaUsuarioActual()` — lecturas desde localStorage.
-- `coincideAreaUsuario(areaUsuario, valores)` — heurística que genera variantes del nombre del área y compara tokens.
+- `normalizarRol`, `obtenerPermisosRol`, `tienePermiso`, `esRolAdministrador`, `esRolContribuidor`, `esRolVisualizador`: reexporta funciones desde `src/lib/roles.js`.
+- `obtenerEmailUsuarioActual()`: devuelve email desde localStorage o token (base64) con varios fallbacks.
+- `serializarFormulario(formulario)`: convierte FormData en objeto (maneja campos repetidos como arrays).
+- `mostrarToast(mensaje, tipo, opciones)`: wrapper que intenta usar `toast` de `lib/ui.js` y usa `alert` si no disponible.
+- `formatearFecha(fecha)`: formatea a locale `es-CO`.
+- `convertirValoresFormulario(valores, esquema)`: convierte tipos (fecha, numero, boolean) según esquema.
+- `obtenerRolUsuarioActual()`, `obtenerRolUsuarioNormalizado()`, `obtenerAreaUsuarioActual()`: lecturas desde localStorage.
+- `coincideAreaUsuario(areaUsuario, valores)`: heurística que genera variantes del nombre del área y compara tokens.
 
 IDs/dom observados o globales
 - Añade a `window` helpers: `window.obtenerEmailUsuarioActual`, `window.obtenerRolUsuarioActual`, `window.obtenerAreaUsuarioActual`.
 
 Notas y recomendaciones
-- `obtenerEmailUsuarioActual` intenta decodificar token con atob() y dividir por '|'. Este formato es dependiente del backend — documentar contrato del token o usar un campo explícito (auth_email) preferiblemente.
-- `mostrarToast` captura fallos y recurre a `alert` — correcto para robustez, pero evita alert en UX final.
+- `obtenerEmailUsuarioActual` intenta decodificar token con atob() y dividir por `|`. Este formato es dependiente del backend; documentar contrato del token o usar un campo explícito (`auth_email`) preferiblemente.
+- `mostrarToast` captura fallos y recurre a `alert`, lo cual es útil para robustez pero evita `alert` en la UX final.
 - `coincideAreaUsuario` tiene heurísticas útiles (separadores, variantes). Añadir tests unitarios para casos con guiones, barras y alias.
 
 Ejemplo de uso
@@ -55,17 +55,17 @@ Propósito
 - Contiene la lógica para resolver la URL del backend (Apps Script o proxy local), y opciones para campos de descripción.
 
 API pública
-- `CONFIG_BACKEND` con `SCRIPT_URL` (resuelto a través de `resolveScriptUrl()`)
-- `opcionesDescripcion` — configuración para editores (rows, maxlength, placeholder, reglas de validación).
-- `shouldUseTextPlain(url)` — heurística para decidir si usar Content-Type `text/plain` (dominios Google).
-- `resolveScriptUrl()` — resolución robusta con múltiples fallbacks (APP_CONFIG_OVERRIDE, APP_CONFIG, local dev proxy, valor por defecto).
+- `CONFIG_BACKEND`: objeto con `SCRIPT_URL` resuelto a través de `resolveScriptUrl()` (por defecto `/api`).
+- `opcionesDescripcion`: configuración para editores (rows, maxlength, placeholder, reglas de validación).
+- `shouldUseTextPlain()`: helper legacy que actualmente retorna `false`; se mantiene por compatibilidad.
+- `resolveScriptUrl()`: devuelve la URL efectiva consultando `window.APP_CONFIG_OVERRIDE`, `window.APP_CONFIG` y usando `/api` como fallback.
 
 Consideraciones detectadas
-- `resolveScriptUrl()` lee `window.APP_CONFIG_OVERRIDE` y `window.APP_CONFIG`. Buen patrón para desarrollo, pero requiere que no se deje un override en producción.
-- `shouldUseTextPlain` favorece plataformas Google (script.google.com) — esto influye en `api.js` al fijar headers.
+- `resolveScriptUrl()` lee `window.APP_CONFIG_OVERRIDE` y `window.APP_CONFIG`. Es útil en desarrollo, pero evitar dejar overrides activos en producción.
+- `shouldUseTextPlain()` se conserva para compatibilidad; los headers ahora los controla el proxy `/api`.
 
 Recomendaciones
-- Documentar exactamente cómo establecer `APP_CONFIG_OVERRIDE.SCRIPT_URL` en entornos de desarrollo. Evitar dejar `USE_LOCAL_PROXY` a `true` en storage sin control.
+- Documentar exactamente cómo establecer `APP_CONFIG_OVERRIDE` en entornos de desarrollo. Evitar dejar `USE_LOCAL_PROXY` a `true` en storage sin control.
 
 ---
 
@@ -75,18 +75,18 @@ Propósito
 - Servicio HTTP que orquesta las llamadas al backend (Apps Script). Exporta una única instancia `apiService` con métodos para todas las operaciones relacionadas con actividades y avances.
 
 API pública (métodos principales)
-- `callBackend(endpoint, payload = {}, options = {})` — función base que prepara payload y hace fetch al `resolveScriptUrl()`.
-- `fetchActividades(options)` — llama a `actividades/obtener` y normaliza distintos formatos de respuesta.
-- `fetchCatalogo(catalogo, options)` — llama a `getCatalogos` y cachea resultados.
-- `saveActividad(actividadData)` — crea o actualiza (endpoints: `actividades/crear`, `actividades/actualizar`).
-- `deleteActividad(id)` — `actividades/eliminar`.
+- `callBackend(endpoint, payload = {}, options = {})`: función base que prepara el payload, agrega `path` y `usuario`, muestra loaders opcionales y delega en `callBackend` de `src/services/apiService.js` para llamar a `/api`.
+- `fetchActividades(options)`: llama a `actividades/obtener` y normaliza distintos formatos de respuesta.
+- `fetchCatalogo(catalogo, options)`: llama a `getCatalogos` y cachea resultados.
+- `saveActividad(actividadData)`: crea o actualiza (endpoints `actividades/crear`, `actividades/actualizar`).
+- `deleteActividad(id)`: endpoint `actividades/eliminar`.
 - `fetchAvances(actividadId)`, `saveAvance(avanceData)`, `deleteAvance(id)` y métodos de revisión `reviewActividad`, `reviewAvance`.
 
 Comportamiento y detalles importantes
-- `callBackend` construye un objeto `data` que incluye: `{ path: endpoint, payload: requestPayload, usuario }` y lo envía como JSON (encapsulando la ruta en el body). También usa `shouldUseTextPlain` para decidir el content-type (aunque actualmente siempre JSON.stringify).
+- `callBackend` construye un objeto `data` con `{ path: endpoint, payload: requestPayload, usuario }` y lo envía como JSON mediante el servicio compartido. Conserva validaciones estrictas del parámetro `endpoint`.
 - Maneja loaders globales `window.showLoader` / `window.hideLoader` si existen.
-- Tiene mucha logging (console.debug/info/warn/error) y validaciones estrictas del parámetro `endpoint`.
-- Normaliza múltiples formatos de respuesta: array directo, `{actividades: []}`, o `{success: true, data: []}`.
+- Contiene logging detallado (`console.debug/info/warn/error`) para facilitar depuración.
+- Normaliza múltiples formatos de respuesta: array directo, `{actividades: []}` o `{success: true, data: []}`.
 
 Recomendaciones específicas
 - El control de `credentials: 'omit'` en fetch puede afectar cookies/credenciales si el backend las requiere; confirmar intención de seguridad CORS.
@@ -111,7 +111,7 @@ Propósito
 - Clase `TableManager` para generar tablas dinámicas (bootstrap) a partir de columnas y datos: soporta búsqueda, ordenación, paginación, formateadores y eventos delegados para filas y botones.
 
 API pública (clase)
-- Constructor: `new TableManager(containerId, options)` — options incluyen `columns`, `data`, `pageSize`, `pagination`, `sortable`, `search`, `tableClass`, `onRender`.
+- Constructor: `new TableManager(containerId, options)`; las options incluyen `columns`, `data`, `pageSize`, `pagination`, `sortable`, `search`, `tableClass`, `onRender`.
 - Métodos: `setData()`, `getData()`, `updateRow(id, newData)`, `deleteRow(id)`, `addRow(rowData)`, `onRowEvent(eventType, handler)`, `onButtonClick(selector, handler)`.
 
 Detalles importantes
@@ -151,13 +151,13 @@ API pública (clase)
 - Métodos: `setValues(data)`, `getValues()`, `reset()`.
 
 Detalles y comportamiento
-- Genera IDs derivados de `options.id` (ej. `${id}-${field.name}`) — importante si se sincroniza con CSS o scripts externos.
+- Genera IDs derivados de `options.id` (ej. `${id}-${field.name}`); importante si se sincroniza con CSS o scripts externos.
 - Soporta selects con `allowCustom` (reemplaza select por input + datalist).
 - El `handleSubmit` serializa el formulario con `serializarFormulario`, convierte valores con `convertirValoresFormulario` y llama a `options.onSubmit(processedData)` si existe.
 
 Recomendaciones específicas
 - `createSelectField` y el manejo de valores seleccionados manipulan `option.selected` directamente; en casos con selects mejorados (Select2, Choices) hay que notificar al componente externo para que re-renderice.
-- Los mensajes de error usan `.invalid-feedback` — compatibilidad con Bootstrap; si la app usa estilos diferentes, adaptar clases.
+- Los mensajes de error usan `.invalid-feedback`; es compatible con Bootstrap. Si la app usa estilos diferentes, adaptar clases.
 - Añadir validación de esquema (ej. con Ajv o zod) en `handleSubmit` antes de llamar a `onSubmit` para evitar enviar payloads malformados.
 
 Ejemplo de definición de formulario
@@ -199,8 +199,8 @@ Consideraciones detectadas
 
 Recomendaciones específicas
 - Separar la lógica puremente de negocio (construcción de payload, normalización y validaciones) en un módulo testable separado para permitir pruebas unitarias sin DOM.
-- Validar en backend las mismas reglas (distribución bimestral, sumas) — el frontend ya valida pero la seguridad requiere validación server-side.
-- Añadir sanitización antes de mostrar contenido HTML derivado de datos (aunque muchas funciones usan textContent, algunos renderizadores generan HTML — revisar sanitización en `cardsManager`).
+- Validar en backend las mismas reglas (distribución bimestral, sumas); el frontend ya valida pero la seguridad requiere validación server-side.
+- Añadir sanitización antes de mostrar contenido HTML derivado de datos. Aunque muchas funciones usan `textContent`, algunos renderizadores generan HTML; revisar sanitización en `cardsManager`.
 
 Ejemplo de flujo
 ```js
@@ -225,10 +225,10 @@ Observación
 ## `existingTableManager.js`
 
 Propósito
-- Variante de tabla pensada para trabajar con una tabla HTML ya definida en el DOM (tbody) — útil para páginas con tablas server-rendered o legacy.
+- Variante de tabla pensada para trabajar con una tabla HTML ya definida en el DOM (tbody); útil para páginas con tablas server-rendered o legacy.
 
 API pública (clase)
-- `new ExistingTableManager(tbodyId, options)` — opciones similares a `TableManager` pero orientadas a una tabla existente. Soporta búsqueda, paginación y sorting mediante manipulación del DOM existente.
+- `new ExistingTableManager(tbodyId, options)`: opciones similares a `TableManager` pero orientadas a una tabla existente. Soporta búsqueda, paginación y sorting mediante manipulación del DOM existente.
 
 Recomendaciones
 - Ideal para migraciones incrementales donde no se quiere reemplazar markup existente. Para nuevos componentes preferir `TableManager` que genera su propia estructura.
@@ -241,7 +241,7 @@ Propósito
 - `CardsManager` renderiza la vista en tarjetas de `actividades` (grid de tarjetas, paginación, búsqueda, modal de detalle con bimestres y shortcut para registrar avances).
 
 API pública (clase)
-- Constructor: `new CardsManager(containerId, options)` — espera que el DOM contenga `#actividades-grid`, `#actividades-empty`, `#actividades-search`, `#actividades-count`, `#actividades-pagination`, `#pagination-info`, `#pagination-controls`, `#page-size-select`.
+- Constructor: `new CardsManager(containerId, options)`; espera que el DOM contenga `#actividades-grid`, `#actividades-empty`, `#actividades-search`, `#actividades-count`, `#actividades-pagination`, `#pagination-info`, `#pagination-controls`, `#page-size-select`.
 - Métodos: `setData`, `onCardClick(callback)`, `openModal(item)`, `closeModal()`, `setEditCallback`, `setAvanceShortcut(options)`, `onButtonClick(selector, callback)`.
 
 Detalles importantes

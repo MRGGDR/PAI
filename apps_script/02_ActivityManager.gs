@@ -587,6 +587,10 @@ function normalizePlanSelectionInput(input) {
   return values;
 }
 
+function normalizeFuenteSelectionInput(input) {
+  return normalizePlanSelectionInput(input);
+}
+
 let PLAN_LOOKUP_CACHE = null;
 
 function getPlanLookupCache() {
@@ -675,83 +679,110 @@ function getFuenteLookupCache() {
 function resolveFuenteSelection(data) {
   try {
     const lookup = getFuenteLookupCache();
-    const candidates = [];
+    const source = data || {};
+    const codes = [];
+    const labels = [];
+    const seenCodes = {};
+    const seenLabelKeys = {};
 
-    if (data) {
-      const codeCandidates = [
-        data.fuente_codigo,
-        data.fuenteCode,
-        data.fuente_id,
-        data.fuenteId,
-        data.fuente_code,
-        data.fuente,
-        data.fuenteSeleccion
-      ];
-
-      codeCandidates.forEach(value => {
-        if (value === null || value === undefined) return;
-        const text = String(value).trim();
-        if (!text) return;
-        if (!candidates.includes(text)) {
-          candidates.push(text);
-        }
-      });
-    }
-
-    let foundItem = null;
-    for (let i = 0; i < candidates.length; i++) {
-      const candidate = candidates[i];
-      if (lookup.byCode[candidate]) {
-        foundItem = lookup.byCode[candidate];
-        break;
+    const addItem = (item) => {
+      if (!item) return;
+      const codeValue = item.code !== undefined && item.code !== null ? String(item.code).trim() : '';
+      if (codeValue && !seenCodes[codeValue]) {
+        seenCodes[codeValue] = true;
+        codes.push(codeValue);
       }
-    }
+      const labelValue = item.label ? String(item.label).trim() : '';
+      const labelKey = labelValue ? normalizeText(labelValue) : '';
+      if (labelValue && labelKey && !seenLabelKeys[labelKey]) {
+        seenLabelKeys[labelKey] = true;
+        labels.push(labelValue);
+      }
+    };
 
-    if (!foundItem && data) {
-      const labelCandidates = [
-        data.fuente_nombre,
-        data.fuenteNombre,
-        data.fuente_label,
-        data.fuenteLabel,
-        data.fuente
-      ];
-
-      for (let i = 0; i < labelCandidates.length; i++) {
-        const value = labelCandidates[i];
-        if (value === null || value === undefined) continue;
-        const text = String(value).trim();
-        if (!text) continue;
-        const normalized = normalizeText(text);
-        if (lookup.byLabel[normalized]) {
-          foundItem = lookup.byLabel[normalized];
-          if (!candidates.includes(foundItem.code)) {
-            candidates.push(foundItem.code);
-          }
-          break;
+    const addCode = (value) => {
+      if (value === null || value === undefined) return;
+      const raw = String(value).trim();
+      if (!raw || seenCodes[raw]) return;
+      let item = lookup.byCode[raw];
+      if (!item) {
+        const normalized = normalizeText(raw);
+        if (normalized && lookup.byLabel[normalized]) {
+          item = lookup.byLabel[normalized];
         }
       }
-    }
+      if (item) {
+        addItem(item);
+      } else {
+        seenCodes[raw] = true;
+        codes.push(raw);
+      }
+    };
 
-    const resolvedCode = foundItem && foundItem.code ? String(foundItem.code) : (candidates.length ? candidates[0] : '');
-    const resolvedLabel = foundItem && foundItem.label
-      ? String(foundItem.label)
-      : (() => {
-          if (!data) return '';
-          const labelFallbacks = [data.fuente_nombre, data.fuenteNombre, data.fuente_label, data.fuenteLabel, data.fuente];
-          const match = labelFallbacks.find(value => value && String(value).trim() !== '');
-          return match ? String(match).trim() : '';
-        })();
+    const addLabel = (value) => {
+      if (value === null || value === undefined) return;
+      const raw = String(value).trim();
+      if (!raw) return;
+      const labelKey = normalizeText(raw);
+      if (labelKey && seenLabelKeys[labelKey]) return;
+      let item = (labelKey && lookup.byLabel[labelKey]) || lookup.byCode[raw];
+      if (item) {
+        addItem(item);
+      } else if (labelKey && !seenLabelKeys[labelKey]) {
+        seenLabelKeys[labelKey] = true;
+        labels.push(raw);
+      }
+    };
+
+    const codeCandidates = []
+      .concat(normalizeFuenteSelectionInput(source.fuente_codigos))
+      .concat(normalizeFuenteSelectionInput(source.fuente_codigo))
+      .concat(normalizeFuenteSelectionInput(source.fuente_ids))
+      .concat(normalizeFuenteSelectionInput(source.fuente_id))
+      .concat(normalizeFuenteSelectionInput(source.fuenteCode))
+      .concat(normalizeFuenteSelectionInput(source.fuente_code))
+      .concat(normalizeFuenteSelectionInput(source.fuenteSeleccion))
+      .concat(normalizeFuenteSelectionInput(source.fuente));
+
+    codeCandidates.forEach(addCode);
+
+    const labelCandidates = []
+      .concat(normalizeFuenteSelectionInput(source.fuente_nombres))
+      .concat(normalizeFuenteSelectionInput(source.fuente_nombre))
+      .concat(normalizeFuenteSelectionInput(source.fuente_label))
+      .concat(normalizeFuenteSelectionInput(source.fuenteLabel))
+      .concat(normalizeFuenteSelectionInput(source.fuente));
+
+    labelCandidates.forEach(addLabel);
+
+    const codeString = codes.join(', ');
+    const labelString = labels.join(', ');
 
     return {
-      code: resolvedCode || '',
-      label: resolvedLabel || ''
+      codes: codes,
+      labels: labels,
+      code: codes.length ? codes[0] : '',
+      label: labels.length ? labels[0] : '',
+      codeString: codeString,
+      labelString: labelString
     };
   } catch (error) {
     console.error('[WARN] resolveFuenteSelection error:', error);
-    const fallbackLabel = data && (data.fuente_nombre || data.fuente || data.fuenteLabel || data.fuenteNombre) ? (data.fuente_nombre || data.fuente || data.fuenteLabel || data.fuenteNombre) : '';
+    const fallbackCodes = normalizeFuenteSelectionInput(
+      data && (data.fuente_codigos || data.fuente_codigo || data.fuente_ids || data.fuente_id || data.fuente)
+    );
+    const fallbackLabels = normalizeFuenteSelectionInput(
+      data && (data.fuente_nombres || data.fuente_nombre || data.fuente)
+    );
+    const codeString = fallbackCodes.join(', ');
+    const labelString = fallbackLabels.length ? fallbackLabels.join(', ') : codeString;
     return {
-      code: data && data.fuente ? String(data.fuente) : '',
-      label: fallbackLabel ? String(fallbackLabel) : (data && data.fuente ? String(data.fuente) : '')
+      codes: fallbackCodes,
+      labels: fallbackLabels.length ? fallbackLabels : (codeString ? [codeString] : []),
+      code: fallbackCodes.length ? fallbackCodes[0] : '',
+      label: labelString || '',
+      codeString: codeString,
+      labelString: labelString
     };
   }
 }
@@ -849,6 +880,42 @@ function resolvePlanSelection(data) {
     labels: labels,
     labelString: labels.join(', ')
   };
+}
+
+function hydrateActivityFuente(activity) {
+  if (!activity || typeof activity !== 'object') {
+    return activity;
+  }
+
+  const fuenteSelection = resolveFuenteSelection(activity);
+  const codeCandidates = fuenteSelection.codes.length
+    ? fuenteSelection.codes
+    : normalizeFuenteSelectionInput(
+        activity.fuente_codigos_lista || activity.fuente_codigos || activity.fuente_ids || activity.fuente_codigo || activity.fuente_id || activity.fuente
+      );
+  const labelCandidates = fuenteSelection.labels.length
+    ? fuenteSelection.labels
+    : normalizeFuenteSelectionInput(
+        activity.fuente_nombres_lista || activity.fuente_nombres || activity.fuente_nombre || activity.fuente
+      );
+  const labelString = fuenteSelection.labelString || (labelCandidates.length ? labelCandidates.join(', ') : (activity.fuente_nombre || activity.fuente || ''));
+  const codeString = fuenteSelection.codeString || (codeCandidates.length ? codeCandidates.join(', ') : (activity.fuente_codigo || activity.fuente_id || ''));
+
+  const hydrated = {
+    ...activity,
+    fuente: labelString,
+    fuente_id: codeCandidates.length === 1 ? codeCandidates[0] : (activity.fuente_id || ''),
+    fuente_codigo: codeString,
+    fuente_codigos: codeCandidates,
+    fuente_ids: codeCandidates,
+    fuente_nombre: labelString,
+    fuente_nombres: labelCandidates
+  };
+
+  delete hydrated.fuente_codigos_lista;
+  delete hydrated.fuente_nombres_lista;
+
+  return hydrated;
 }
 
 // ==================== MANEJADOR PRINCIPAL ====================
@@ -1039,6 +1106,24 @@ function createActivity(data) {
     data.estado_revision || data.estadoRevision || estadoInicial
   ) || defaultReviewState;
 
+  const fuenteCodesResolved = fuenteSelection.codes && fuenteSelection.codes.length
+    ? fuenteSelection.codes
+    : normalizeFuenteSelectionInput(
+        data.fuente_codigos || data.fuente_codigo || data.fuente_ids || data.fuente_id || data.fuente
+      );
+  const fuenteLabelsResolved = fuenteSelection.labels && fuenteSelection.labels.length
+    ? fuenteSelection.labels
+    : normalizeFuenteSelectionInput(data.fuente_nombres || data.fuente_nombre || data.fuente);
+  const fuenteCodeString = fuenteSelection.codeString || (fuenteCodesResolved.length ? fuenteCodesResolved.join(', ') : '');
+  const fuenteLabelString = (() => {
+    if (fuenteSelection.labelString) return fuenteSelection.labelString;
+    if (fuenteLabelsResolved.length) return fuenteLabelsResolved.join(', ');
+    if (typeof data.fuente_nombre === 'string') return data.fuente_nombre;
+    if (Array.isArray(data.fuente_nombre)) return data.fuente_nombre.join(', ');
+    if (typeof data.fuente === 'string') return data.fuente;
+    return '';
+  })();
+
   const completeData = {
     actividad_id: activityId,
     codigo: '',
@@ -1066,9 +1151,15 @@ function createActivity(data) {
   plan_display: planSelection.labelString,
       bimestre_id: data.bimestre_id || '',
       mipg: data.mipg || '',
-  fuente: fuenteSelection.label || data.fuente || '',
-  fuente_id: fuenteSelection.code || data.fuente_id || '',
-  fuente_nombre: fuenteSelection.label || data.fuente_nombre || data.fuente || '',
+  fuente: fuenteLabelString || '',
+  fuente_id: fuenteCodesResolved.length === 1 ? fuenteCodesResolved[0] : '',
+  fuente_codigo: fuenteCodeString || '',
+  fuente_codigos: fuenteCodeString || '',
+  fuente_ids: fuenteCodeString || '',
+  fuente_nombre: fuenteLabelString || '',
+  fuente_nombres: fuenteLabelString || '',
+  fuente_codigos_lista: fuenteCodesResolved,
+  fuente_nombres_lista: fuenteLabelsResolved,
       usuario: data.usuario || 'sistema',
       creado_por: userEmail, // Usar el email determinado correctamente
     estado: estadoInicial,
@@ -1219,15 +1310,15 @@ function createActivity(data) {
     }
     
     // Resolver fuente
-    if (fuenteSelection.label) {
-      console.log(` [OK] Fuente resuelta: ${fuenteSelection.code || data.fuente || 'n/a'} -> ${fuenteSelection.label}`);
-      dataForSheet.fuente = fuenteSelection.label;
+    if (fuenteLabelString) {
+      console.log(` [OK] Fuente resuelta: ${fuenteCodeString || data.fuente || 'n/a'} -> ${fuenteLabelString}`);
     } else if (data.fuente) {
       console.log(` [WARN] No se pudo resolver fuente, usando valor recibido: ${data.fuente}`);
-      dataForSheet.fuente = data.fuente;
-    } else {
-      dataForSheet.fuente = '';
     }
+
+    dataForSheet.fuente = fuenteLabelString || data.fuente || '';
+    dataForSheet.fuente_codigo = fuenteCodeString || data.fuente_codigo || '';
+    dataForSheet.fuente_codigos = dataForSheet.fuente_codigo;
     
     // Asegurar que tenemos todos los campos básicos
   dataForSheet.meta_valor = metaTotal;
@@ -1261,6 +1352,11 @@ function createActivity(data) {
   completeData.riesgos = dataForSheet.riesgos;
   completeData.riesgo_porcentaje = riesgoPorcentaje;
   completeData.fuente = dataForSheet.fuente;
+  completeData.fuente_codigo = dataForSheet.fuente_codigo;
+  completeData.fuente_codigos = dataForSheet.fuente_codigos;
+  completeData.fuente_ids = dataForSheet.fuente_codigos;
+  completeData.fuente_nombre = dataForSheet.fuente;
+  completeData.fuente_nombres = dataForSheet.fuente;
   completeData.fecha_inicio_planeada = dataForSheet.fecha_inicio_planeada;
   completeData.fecha_fin_planeada = dataForSheet.fecha_fin_planeada;
   completeData.responsable = dataForSheet.responsable;
@@ -1320,7 +1416,9 @@ function createActivity(data) {
   completeData.meta_bimestres_total = metaGuardada;
   completeData.meta_bimestres_diferencia = Math.round((metaGuardada - metaTotal) * 100) / 100;
 
-      const responseData = normalizeActivityRecord({ actividad_id: activityId, ...completeData });
+      const responseData = hydrateActivityFuente(
+        normalizeActivityRecord({ actividad_id: activityId, ...completeData })
+      );
       const response = formatResponse(
         true, 
         responseData, 
@@ -1428,15 +1526,7 @@ function getAllActivities(filters = {}) {
 
     const bimestresMap = getBimestresMapByActivity();
     filteredActivities = filteredActivities
-      .map(activity => {
-        const fuenteSelection = resolveFuenteSelection(activity);
-        return {
-          ...activity,
-          fuente: fuenteSelection.label || activity.fuente || '',
-          fuente_id: fuenteSelection.code || activity.fuente_id || '',
-          fuente_nombre: fuenteSelection.label || activity.fuente_nombre || activity.fuente || ''
-        };
-      })
+      .map(activity => hydrateActivityFuente(activity))
       .map(activity => hydrateActivityWithBimestres(activity, bimestresMap));
     
     // Ordenar por fecha de creación (más recientes primero)
@@ -1479,13 +1569,9 @@ function getActivityById(id) {
     if (!activity) {
       return formatResponse(false, null, '', `Actividad con ID '${id}' no encontrada`);
     }
-    const fuenteSelection = resolveFuenteSelection(activity);
     const planSelection = resolvePlanSelection(activity);
     const activityWithPlan = {
-      ...activity,
-      fuente: fuenteSelection.label || activity.fuente || '',
-      fuente_id: fuenteSelection.code || activity.fuente_id || '',
-      fuente_nombre: fuenteSelection.label || activity.fuente_nombre || activity.fuente || '',
+      ...hydrateActivityFuente(activity),
       plan: planSelection.labelString || activity.plan || '',
       plan_display: planSelection.labelString || activity.plan || '',
       plan_ids: planSelection.ids,
@@ -1647,7 +1733,9 @@ function updateActivity(id, updateData) {
       meta_bimestres_total: metaFinal,
       meta_bimestres_diferencia: Math.round((metaFinal - metaObjetivo) * 100) / 100
     };
-    const responseData = normalizeActivityRecord(responseDataRaw, processedData);
+    const responseData = hydrateActivityFuente(
+      normalizeActivityRecord(responseDataRaw, processedData)
+    );
 
     return formatResponse(
       true, 
@@ -1812,9 +1900,26 @@ function prepareActivityData(activityId, data, operation) {
   } else {
     prepared.presupuesto_programado = '';
   }
-  prepared.fuente = fuenteSelection.label || data.fuente || '';
-  prepared.fuente_id = fuenteSelection.code || data.fuente_id || '';
-  prepared.fuente_nombre = fuenteSelection.label || data.fuente_nombre || data.fuente || '';
+  const fuenteCodesPrep = fuenteSelection.codes.length
+    ? fuenteSelection.codes
+    : normalizeFuenteSelectionInput(
+        data.fuente_codigos || data.fuente_codigo || data.fuente_ids || data.fuente_id || data.fuente
+      );
+  const fuenteLabelsPrep = fuenteSelection.labels.length
+    ? fuenteSelection.labels
+    : normalizeFuenteSelectionInput(data.fuente_nombres || data.fuente_nombre || data.fuente);
+  const fuenteCodeStringPrep = fuenteSelection.codeString || (fuenteCodesPrep.length ? fuenteCodesPrep.join(', ') : '');
+  const fuenteLabelStringPrep = fuenteSelection.labelString || (fuenteLabelsPrep.length ? fuenteLabelsPrep.join(', ') : (typeof data.fuente_nombre === 'string' ? data.fuente_nombre : (Array.isArray(data.fuente_nombre) ? data.fuente_nombre.join(', ') : (typeof data.fuente === 'string' ? data.fuente : ''))));
+
+  prepared.fuente = fuenteLabelStringPrep || '';
+  prepared.fuente_id = fuenteCodesPrep.length === 1 ? fuenteCodesPrep[0] : (data.fuente_id || '');
+  prepared.fuente_codigo = fuenteCodeStringPrep || '';
+  prepared.fuente_codigos = fuenteCodeStringPrep || '';
+  prepared.fuente_ids = fuenteCodeStringPrep || '';
+  prepared.fuente_nombre = fuenteLabelStringPrep || '';
+  prepared.fuente_nombres = fuenteLabelStringPrep || '';
+  prepared.fuente_codigos_lista = fuenteCodesPrep;
+  prepared.fuente_nombres_lista = fuenteLabelsPrep;
   prepared.plan_ids = planData.ids;
   prepared.plan_id = planData.ids.length ? planData.ids[0] : '';
   prepared.plan = planData.labelString;

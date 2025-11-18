@@ -57,6 +57,8 @@ function llenarSelect(selectId, items, options = {}) {
 
   if (selectId === 'plan_id') {
     this.initPlanMultiSelect();
+  } else if (selectId === 'fuente_financiacion') {
+    this.initFuenteMultiSelect();
   } else {
     this.refreshModernSelect(selectId);
   }

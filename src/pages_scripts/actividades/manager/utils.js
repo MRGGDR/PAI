@@ -27,16 +27,16 @@ function normalizarSeleccionMultiple(valor) {
     return valor.map(v => String(v)).filter(v => v && v !== '');
   }
   if (typeof valor === 'string') {
-    if (valor.includes(',')) {
-      return valor
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
+    const texto = valor.trim();
+    if (!texto) return [];
+    if (texto.includes(',')) {
+      return texto
         .split(',')
         .map(item => item.trim())
         .filter(Boolean)
         .map(v => String(v));
     }
-    return valor ? [String(valor)] : [];
+    return [String(texto)];
   }
   if (valor) {
     return [String(valor)];

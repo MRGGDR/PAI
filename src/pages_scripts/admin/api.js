@@ -2,15 +2,14 @@
  * api.js - Servicios de comunicación con el backend para el panel de administración
  */
 
-import { shouldUseTextPlain, resolveScriptUrl } from '../actividades/config.js';
 import { obtenerEmailUsuarioActual } from '../actividades/utils.js';
+import { callBackend as callApi } from '../../services/apiService.js';
 
 /**
  * Clase para manejar la comunicación con el backend
  */
 class ApiService {
   constructor() {
-    this.backendUrl = resolveScriptUrl();
     this.catalogosCache = {};
   }
 
@@ -30,41 +29,23 @@ class ApiService {
 
     const sanitizedEndpoint = endpoint.trim();
 
+    const requestPayload = payload && typeof payload === 'object' ? { ...payload } : {};
+    if (!requestPayload.usuario) {
+      requestPayload.usuario = obtenerEmailUsuarioActual();
+    }
+
+    const requestBody = {
+      payload: requestPayload,
+      usuario: requestPayload.usuario,
+      ...requestPayload
+    };
+
     try {
       if (typeof window !== 'undefined' && window.showLoader && loaderMessage) {
         window.showLoader(loaderMessage);
       }
 
-      const url = this.backendUrl;
-
-      const headers = {
-        'Content-Type': shouldUseTextPlain(url) ? 'text/plain' : 'application/json',
-      };
-
-      const requestPayload = payload && typeof payload === 'object' ? payload : {};
-
-      const data = {
-        path: sanitizedEndpoint,
-        payload: requestPayload,
-        usuario: requestPayload.usuario || obtenerEmailUsuarioActual(),
-        ...requestPayload
-      };
-
-      const fetchOptions = {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data),
-        cache: 'no-store',
-        credentials: 'omit'
-      };
-
-      const response = await fetch(url, fetchOptions);
-
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status} ${response.statusText}`);
-      }
-
-      const result = await response.json();
+      const result = await callApi(sanitizedEndpoint, requestBody);
 
       if (result && result.error) {
         throw new Error(result.error);

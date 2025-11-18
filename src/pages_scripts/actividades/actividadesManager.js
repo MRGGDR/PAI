@@ -95,7 +95,8 @@ class ActividadesManager {
       formActividad: null,
       selectEnhancers: new Map(),
       datePickers: new Map(),
-      multiSelectPlanes: null
+      multiSelectPlanes: null,
+      multiSelectFuentes: null
     };
 
     this.descripcionElements = null;
@@ -194,6 +195,157 @@ class ActividadesManager {
     this.aplicarEstilosBaseSelects();
     this.aplicarEstilosBaseDatePickers();
     this.initPlanMultiSelect();
+    this.initFuenteMultiSelect();
+  }
+
+  obtenerFuentesDesdeDato(raw = {}, catalogoFuentes = []) {
+    const ids = [];
+    const nombres = [];
+    const idsVisitados = new Set();
+    const nombresVisitados = new Set();
+    const catalogo = Array.isArray(catalogoFuentes) ? catalogoFuentes : [];
+    const normalizar = valor => this.normalizarTextoComparacion(valor);
+
+    const agregarDesdeItem = (item) => {
+      if (!item) return;
+      const id = String(item.id ?? '').trim();
+      if (id && !idsVisitados.has(id)) {
+        idsVisitados.add(id);
+        ids.push(id);
+      }
+      const nombre = item.nombre || item.raw?.label || item.raw?.nombre || '';
+      const claveNombre = normalizar(nombre);
+      if (nombre && !nombresVisitados.has(claveNombre)) {
+        nombresVisitados.add(claveNombre);
+        nombres.push(nombre);
+      }
+    };
+
+    const intentarPorId = (valor) => {
+      if (valor === null || valor === undefined) return;
+      const texto = String(valor).trim();
+      if (!texto) return;
+      if (idsVisitados.has(texto)) return;
+      const coincidencia = catalogo.find(item => String(item.id) === texto);
+      if (coincidencia) {
+        agregarDesdeItem(coincidencia);
+      } else {
+        idsVisitados.add(texto);
+        ids.push(texto);
+      }
+    };
+
+    const fuentesIdCandidatos = [
+      raw.fuente_codigos_lista,
+      raw.fuente_ids,
+      raw.fuenteIds,
+      raw.fuente_codigos,
+      raw.fuenteCodes,
+      raw.fuente_codigo,
+      raw.fuente_code,
+      raw.fuente_id,
+      raw.fuente
+    ];
+
+    fuentesIdCandidatos.forEach(valor => {
+      this.normalizarSeleccionMultiple(valor).forEach(intentarPorId);
+    });
+
+    const fuentesNombreCandidatos = [
+      raw.fuente_nombres_lista,
+      raw.fuente_nombres,
+      raw.fuente_nombre,
+      raw.fuenteLabels,
+      raw.fuente_label,
+      raw.fuenteLabel,
+      raw.fuente
+    ];
+
+    fuentesNombreCandidatos.forEach(valor => {
+      const lista = Array.isArray(valor)
+        ? valor
+        : typeof valor === 'string'
+          ? valor.split(',')
+          : [];
+
+      lista.forEach(nombreRaw => {
+        if (nombreRaw === null || nombreRaw === undefined) return;
+        const nombre = String(nombreRaw).trim();
+        if (!nombre) return;
+        const clave = normalizar(nombre);
+        if (nombresVisitados.has(clave)) return;
+
+        const coincidencia = catalogo.find(item => {
+          const comparables = [item.nombre, item.raw?.label, item.raw?.nombre];
+          return comparables.some(valorComparable => normalizar(valorComparable) === clave);
+        });
+
+        if (coincidencia) {
+          agregarDesdeItem(coincidencia);
+        } else {
+          nombresVisitados.add(clave);
+          nombres.push(nombre);
+        }
+      });
+    });
+
+    return {
+      ids,
+      nombres,
+      display: nombres.join(', ')
+    };
+  }
+
+  obtenerNombresFuentesPorIds(ids = []) {
+    if (!Array.isArray(ids) || !ids.length) return [];
+    const catalogo = Array.isArray(this.state?.catalogos?.fuentes) ? this.state.catalogos.fuentes : [];
+    const nombres = [];
+    const idsVisitados = new Set();
+    const labelsVisitados = new Set();
+    ids.forEach(valor => {
+      const id = String(valor ?? '').trim();
+      if (!id || idsVisitados.has(id)) return;
+      idsVisitados.add(id);
+      const item = catalogo.find(entry => String(entry.id) === id);
+      const nombre = item?.nombre || item?.raw?.label || item?.raw?.nombre || '';
+      if (nombre) {
+        const clave = this.normalizarTextoComparacion(nombre);
+        if (!labelsVisitados.has(clave)) {
+          labelsVisitados.add(clave);
+          nombres.push(nombre);
+        }
+      }
+    });
+    return nombres;
+  }
+
+  obtenerFuentesSeleccionadas() {
+    const select = document.getElementById('fuente_financiacion');
+    if (!select) {
+      return { ids: [], labels: [] };
+    }
+
+    const ids = [];
+    const labels = [];
+    const idsVisitados = new Set();
+    const labelsVisitados = new Set();
+
+    [...select.options].forEach(option => {
+      if (!option || option.value === '' || !option.selected) return;
+      const id = String(option.value).trim();
+      if (id && !idsVisitados.has(id)) {
+        idsVisitados.add(id);
+        ids.push(id);
+      }
+      const nombre = (option.textContent || option.label || id).trim();
+      const clave = this.normalizarTextoComparacion(nombre);
+      if (nombre && !labelsVisitados.has(clave)) {
+        labelsVisitados.add(clave);
+        labels.push(nombre);
+      }
+    });
+
+    return { ids, labels };
   }
 
   setIndicadorTexto(texto = '') {
@@ -782,6 +934,13 @@ class ActividadesManager {
           riesgoPorcentajeInput.value = '';
         }
         this.actualizarRiesgoSemaforoUI(null);
+        const fuenteSelect = document.getElementById('fuente_financiacion');
+        if (fuenteSelect) {
+          [...fuenteSelect.options].forEach(option => {
+            option.selected = false;
+          });
+          this.refreshFuenteMultiSelect();
+        }
         const planSelect = document.getElementById('plan_id');
         if (planSelect) {
           [...planSelect.options].forEach(option => {
@@ -812,6 +971,20 @@ class ActividadesManager {
           this.state.catalogos.planes
         );
 
+        const fuenteInfo = this.obtenerFuentesDesdeDato(
+          {
+            fuente_codigos_lista: data.fuente_codigos_lista || data.raw?.fuente_codigos_lista,
+            fuente_ids: data.fuente_ids || data.fuenteIds || data.raw?.fuente_ids || data.raw?.fuenteIds,
+            fuente_codigos: data.fuente_codigos || data.raw?.fuente_codigos,
+            fuente_codigo: data.fuente_codigo || data.raw?.fuente_codigo,
+            fuente_id: data.fuente_id || data.raw?.fuente_id,
+            fuente: data.fuente || data.raw?.fuente,
+            fuente_nombres_lista: data.fuente_nombres_lista || data.raw?.fuente_nombres_lista,
+            fuente_nombre: data.fuente_nombre || data.raw?.fuente_nombre
+          },
+          this.state.catalogos.fuentes
+        );
+
         const valores = {
           id: data.id || data.actividad_id || '',
           codigo: data.codigo || data.codigoActividad || data.idCodigo || data.raw?.codigo || '',
@@ -839,7 +1012,9 @@ class ActividadesManager {
           meta_indicador_valor: data.meta_indicador_valor ?? data.meta_valor ?? data.meta ?? '',
           meta_indicador_detalle: data.meta_indicador_detalle || data.meta_texto_completo || data.meta_detalle || data.meta_texto || data.metaDescripcion || data.raw?.meta_indicador_detalle || '',
           presupuesto_programado: data.presupuesto_programado || '',
-          fuente: this.resolverValorCatalogo(this.state.catalogos.fuentes, data.fuente || data.fuente_id, data.fuente_nombre),
+          fuente_ids: fuenteInfo.ids,
+          fuente_nombres: fuenteInfo.nombres,
+          fuente_display: fuenteInfo.display,
           plan_ids: planInfo.ids,
           plan_display: planInfo.display,
           responsable: data.responsable || this.state.usuario?.email || obtenerEmailUsuarioActual(),
@@ -879,6 +1054,8 @@ class ActividadesManager {
           } else if (elemento.tagName === 'SELECT') {
             if (elemento.id === 'plan_id') {
               this.refreshPlanMultiSelect();
+            } else if (elemento.id === 'fuente_financiacion') {
+              this.refreshFuenteMultiSelect();
             } else {
               this.refreshModernSelect(campoId);
             }
@@ -896,7 +1073,7 @@ class ActividadesManager {
           asignarValor('linea_trabajo_id', valores.linea_trabajo_id);
           asignarValor('linea_accion_id', valores.linea_accion_id);
         asignarValor('presupuesto_programado', valores.presupuesto_programado);
-        asignarValor('fuente_financiacion', valores.fuente);
+        asignarValor('fuente_financiacion', valores.fuente_ids);
         asignarValor('plan_id', valores.plan_ids);
         asignarValor('responsable', valores.responsable);
         asignarValor('fecha_inicio_planeada', valores.fecha_inicio_planeada);
@@ -1106,15 +1283,28 @@ class ActividadesManager {
   }
 
   construirPayloadActividad(datos) {
-    const fuenteSelect = document.getElementById('fuente_financiacion');
-    const fuenteValor = datos.fuente || '';
-    let fuenteNombreSeleccionada = '';
-    if (fuenteSelect) {
-      const opcionSeleccionada = fuenteSelect.options[fuenteSelect.selectedIndex];
-      if (opcionSeleccionada && fuenteValor) {
-        fuenteNombreSeleccionada = (opcionSeleccionada.textContent || opcionSeleccionada.label || '').trim();
-      }
+    const fuentesFormulario = this.normalizarSeleccionMultiple(datos.fuente);
+    const fuentesFormularioIds = this.normalizarSeleccionMultiple(
+      datos.fuente_ids || datos.fuente_codigos || datos.fuente_codigo || datos.fuente_id
+    );
+    const seleccionFuentesUI = this.obtenerFuentesSeleccionadas();
+    const fuentesIds = seleccionFuentesUI.ids.length
+      ? seleccionFuentesUI.ids
+      : (fuentesFormularioIds.length ? fuentesFormularioIds : fuentesFormulario);
+    const fuentesIdsUnicos = [...new Set(fuentesIds.filter(Boolean).map(valor => String(valor).trim()))].filter(Boolean);
+    let fuentesNombres = seleccionFuentesUI.labels.length
+      ? seleccionFuentesUI.labels
+      : this.obtenerNombresFuentesPorIds(fuentesIdsUnicos);
+    if (!fuentesNombres.length) {
+      const fallbackNombres = Array.isArray(datos.fuente_nombre)
+        ? datos.fuente_nombre
+        : typeof datos.fuente_nombre === 'string'
+          ? datos.fuente_nombre.split(',').map(item => item.trim()).filter(Boolean)
+          : [];
+      fuentesNombres = fallbackNombres;
     }
+    const fuenteValor = fuentesIdsUnicos.join(', ');
+    const fuenteNombreSeleccionada = fuentesNombres.join(', ');
 
     const indicadorTexto = (datos.indicador || datos.indicador_texto || '').toString().trim();
     const metaDetalle = (datos.meta_indicador_detalle || '').toString().trim();
@@ -1165,7 +1355,11 @@ class ActividadesManager {
           ? Number(datos.presupuesto_programado)
           : 0,
       fuente: fuenteValor,
+      fuente_codigo: fuenteValor,
+      fuente_codigos: fuentesIdsUnicos,
+      fuente_ids: fuentesIdsUnicos,
       fuente_nombre: fuenteNombreSeleccionada,
+      fuente_nombres: fuentesNombres,
       plan_ids: this.normalizarSeleccionMultiple(datos.plan_id),
       responsable: datos.responsable || this.state.usuario?.email || obtenerEmailUsuarioActual(),
       fecha_inicio_planeada: datos.fecha_inicio_planeada || '',

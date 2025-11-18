@@ -7,9 +7,8 @@
   <link rel="stylesheet" href="../styles/login.css">
   <link rel="stylesheet" href="../styles/loader.css">
   
-    <!-- No inline API override here. In production the app uses a relative /api endpoint
-         which should be provided by the deployment platform (for example a Vercel serverless
-         function that forwards to the Apps Script URL configured via environment variable).
+    <!-- No inline API override here. En producción la app usa el endpoint relativo /api.
+         Solo en desarrollo local se puede forzar el proxy local si USE_LOCAL_PROXY === 'true'.
     -->
     <script>
       // Dev helper: when running on localhost, prefer a local proxy to avoid CORS issues.
@@ -18,7 +17,6 @@
     const h = (typeof location !== 'undefined' && location.hostname) ? location.hostname : '';
     // Treat localhost and common private LAN ranges as development hosts
     const isLocalHost = h === 'localhost' || h === '127.0.0.1' || /^192\.168\./.test(h) || /^10\./.test(h) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(h);
-      const REMOTE_BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxgt5fpDd1PDjSd6MQyAij2fUNUFigDVDLf2jCfwq8e9sPBC1hhxQxzDgdKKGasdtixRg/exec';
     const LOCAL_PROXY_URL = 'http://localhost:3000/api';
     let useLocalProxy = false;
     try {
@@ -26,10 +24,10 @@
     } catch (storageErr) {
       useLocalProxy = false;
     }
-    if (isLocalHost) {
+    if (isLocalHost && useLocalProxy) {
             window.APP_CONFIG_OVERRIDE = window.APP_CONFIG_OVERRIDE || {};
             if (!window.APP_CONFIG_OVERRIDE.BASE_URL) {
-              window.APP_CONFIG_OVERRIDE.BASE_URL = useLocalProxy ? LOCAL_PROXY_URL : REMOTE_BACKEND_URL;
+              window.APP_CONFIG_OVERRIDE.BASE_URL = LOCAL_PROXY_URL;
             }
             // Removed noisy console log to keep login console clean
           }

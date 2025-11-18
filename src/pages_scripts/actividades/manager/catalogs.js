@@ -512,9 +512,10 @@ function poblarSelectsCatalogos() {
   this.llenarSelect('estrategia_id', this.state.catalogos.estrategias, { placeholder: 'Seleccionar estrategia...' });
   this.llenarSelect('linea_trabajo_id', this.state.catalogos.lineasTrabajo, { placeholder: 'Seleccionar línea de trabajo...' });
   this.llenarSelect('linea_accion_id', this.state.catalogos.lineas, { placeholder: 'Seleccionar línea de acción...' });
-  this.llenarSelect('fuente_financiacion', this.state.catalogos.fuentes, { placeholder: 'Seleccionar fuente...' });
+  this.llenarSelect('fuente_financiacion', this.state.catalogos.fuentes, { placeholder: 'Seleccionar fuentes...' });
   this.llenarSelect('plan_id', this.state.catalogos.planes, { placeholder: 'Seleccionar planes...' });
   this.refreshPlanMultiSelect();
+  this.refreshFuenteMultiSelect();
 
   this.llenarSelect('filtro-area', this.state.catalogos.areas, { placeholder: 'Todas las áreas' });
   this.llenarSelect('filtro-plan', this.state.catalogos.planes, { placeholder: 'Todos los planes' });

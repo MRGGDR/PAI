@@ -32,7 +32,7 @@ Scripts y dependencias
 - `../pages_scripts/dashboard.js` (o nombre equivalente) — lógica específica de la página (filtros, fetch de métricas, pintar tablas y charts).
 
 Ejemplo de uso (desarrollo)
-- Abrir en navegador mediante servidor estático (p. ej. `npx serve public` o usando `start-local.ps1` de este repo) para que los imports de módulos funcionen correctamente.
+- Abrir en navegador mediante servidor estático (p. ej. `npm run start` que ejecuta `vercel dev`) para que los imports de módulos funcionen correctamente.
 
 Recomendaciones
 - Asegurar que las llamadas de datos (fetch) usen la URL base (`config.js`) y manejen errores de red/graceful fallback.
@@ -147,7 +147,7 @@ Seguridad y recomendaciones
 
 ## Contratos y práctica recomendada
 - Todas las páginas usan `config.js` para resolver `BASE_URL` y deben usar `fetch` con rutas relativas basadas en esa configuración.
-- Para desarrollo local se recomienda usar el script/archivo `start-local.ps1` o `start-all.js` (revisa `package.json`) que configuren un proxy si fuese necesario.
+- Para desarrollo local se recomienda usar `npm run start` (internamente `vercel dev`) o ejecutar `npx vercel dev --listen 3000` para contar con proxy y estáticos.
 
 Edge cases a considerar
 - Formularios con campos numéricos vacíos o NaN.
